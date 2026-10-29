@@ -1,0 +1,93 @@
+# Full local stack: `docker compose up --build`
+#   frontend  http://localhost:3000   (proxies /api to the API; FRONTEND_PORT=3100 to change)
+#   api       http://localhost:8000   (Swagger at /api/docs/)
+#   simulator http://localhost:8001
+
+x-backend-env: &backend-env
+  DJANGO_SETTINGS_MODULE: config.settings.dev
+  DATABASE_URL: postgres://ccp:ccp@postgres:5432/ccp
+  REDIS_URL: redis://redis:6379/0
+
+x-simulator-env: &simulator-env
+  DJANGO_SETTINGS_MODULE: config.settings.dev
+  DATABASE_URL: postgres://ccp:ccp@postgres:5432/simulator
+  REDIS_URL: redis://redis:6379/1
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ccp
+      POSTGRES_PASSWORD: ccp
+      POSTGRES_DB: ccp
+    # Host port 5433: a locally installed Postgres usually owns 5432.
+    ports: ["${POSTGRES_HOST_PORT:-5433}:5432"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ccp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    command: sh -c "python manage.py migrate --noinput && uvicorn config.asgi:application --host 0.0.0.0 --port 8000"
+    environment: *backend-env
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    build: ./backend
+    command: celery -A config worker --loglevel=info
+    environment: *backend-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  beat:
+    build: ./backend
+    command: celery -A config beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    environment: *backend-env
+    depends_on:
+      redis: { condition: service_healthy }
+
+  provider-simulator:
+    build: ./provider-simulator
+    command: sh -c "python manage.py migrate --noinput && uvicorn config.asgi:application --host 0.0.0.0 --port 8001"
+    environment: *simulator-env
+    ports: ["8001:8001"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  provider-simulator-worker:
+    build: ./provider-simulator
+    command: celery -A config worker --loglevel=info
+    environment: *simulator-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        API_ORIGIN: http://api:8000
+    ports: ["${FRONTEND_PORT:-3000}:3000"]
+    depends_on: [api]
+
+volumes:
+  postgres-data:
