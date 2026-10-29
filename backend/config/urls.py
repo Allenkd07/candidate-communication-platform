@@ -8,6 +8,9 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("api/", include("candidate_comms.api.urls")),
 ]
 
+handler404 = "candidate_comms.core.exceptions.views.page_not_found"
+handler500 = "candidate_comms.core.exceptions.views.server_error"
+
 if settings.DEBUG:
     # uvicorn does not serve static files, so Django serves them when DEBUG is on.
     urlpatterns += staticfiles_urlpatterns()

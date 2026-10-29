@@ -28,6 +28,10 @@ jobs:
     env:
       DATABASE_URL: postgres://ccp:ccp@127.0.0.1:5432/ccp
       REDIS_URL: redis://127.0.0.1:6379/0
+      WEBHOOK_BASE_URL: http://api.test
+      SIMULATOR_API_URL: http://simulator.test
+      SIMULATOR_API_KEY: ci-simulator-api-key
+      SIMULATOR_WEBHOOK_SECRET: ci-simulator-webhook-secret
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v9.0.0

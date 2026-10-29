@@ -11,6 +11,10 @@ x-backend-env: &backend-env
   DJANGO_SETTINGS_MODULE: config.settings.dev
   DATABASE_URL: ${API_DATABASE_URL:?set in .env}
   REDIS_URL: ${API_REDIS_URL:?set in .env}
+  WEBHOOK_BASE_URL: ${API_WEBHOOK_BASE_URL:?set in .env}
+  SIMULATOR_API_URL: ${API_SIMULATOR_URL:?set in .env}
+  SIMULATOR_API_KEY: ${SHARED_SIMULATOR_API_KEY:?set in .env}
+  SIMULATOR_WEBHOOK_SECRET: ${SHARED_SIMULATOR_WEBHOOK_SECRET:?set in .env}
 
 x-simulator-env: &simulator-env
   DJANGO_SETTINGS_MODULE: config.settings.dev

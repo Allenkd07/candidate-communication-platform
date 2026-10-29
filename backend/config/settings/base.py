@@ -28,6 +28,11 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "candidate_comms.core",
     "candidate_comms.api",
+    "candidate_comms.candidates",
+    "candidate_comms.communications",
+    "candidate_comms.integrations",
+    "candidate_comms.webhooks",
+    "candidate_comms.realtime",
 ]
 
 MIDDLEWARE = [
@@ -87,6 +92,7 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
     "UNAUTHENTICATED_USER": None,
+    "EXCEPTION_HANDLER": "candidate_comms.core.exceptions.handler.api_exception_handler",
 }
 
 SPECTACULAR_SETTINGS = {
@@ -95,6 +101,11 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
+    # One named enum per choice set, so generated frontend types share them.
+    "ENUM_NAME_OVERRIDES": {
+        "MessageStatusEnum": "candidate_comms.communications.models.MessageStatus",
+        "ChannelEnum": "candidate_comms.communications.models.Channel",
+    },
 }
 
 # --- Celery ------------------------------------------------------------------
@@ -104,6 +115,45 @@ CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_IGNORE_RESULT = True
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_BEAT_SCHEDULE = {
+    "reconcile-stale-messages": {
+        "task": "candidate_comms.communications.tasks.reconcile_stale_messages",
+        "schedule": 60.0,
+    },
+}
+
+# --- Candidates --------------------------------------------------------------
+# Region assumed for phone numbers entered without a country code.
+DEFAULT_PHONE_REGION = env("DEFAULT_PHONE_REGION", default="IN")
+
+# --- Messaging ---------------------------------------------------------------
+# Public base URL of this API; providers post delivery webhooks to
+# {WEBHOOK_BASE_URL}/api/v1/webhooks/{gateway}/.
+WEBHOOK_BASE_URL = env("WEBHOOK_BASE_URL")
+
+SIMULATOR_API_URL = env("SIMULATOR_API_URL")
+SIMULATOR_API_KEY = env("SIMULATOR_API_KEY")
+SIMULATOR_WEBHOOK_SECRET = env("SIMULATOR_WEBHOOK_SECRET")
+SIMULATOR_TIMEOUT_SECONDS = env.float("SIMULATOR_TIMEOUT_SECONDS", default=5.0)
+
+# Gateway used for each channel when a send request does not name one.
+MESSAGING_DEFAULT_GATEWAYS = {"sms": "simulator"}
+
+# Automatic retries for transient gateway errors: exponential backoff with full jitter,
+# capped per attempt. A Retry-After from the gateway takes precedence.
+MESSAGE_SEND_MAX_RETRIES = 4
+MESSAGE_RETRY_BASE_DELAY_SECONDS = 2.0
+MESSAGE_RETRY_MAX_DELAY_SECONDS = 60.0
+
+# Reconciliation: messages stuck in SENT longer than this are re-checked with the gateway
+# (covers lost webhooks); messages stuck in QUEUED are re-enqueued (covers lost tasks).
+RECONCILE_SENT_AFTER_SECONDS = 300
+RECONCILE_QUEUED_AFTER_SECONDS = 600
+RECONCILE_BATCH_SIZE = 100
+
+# --- Realtime ----------------------------------------------------------------
+REALTIME_CHANNEL = "ccp:events"
+REALTIME_KEEPALIVE_SECONDS = 15.0
 
 LOGGING = {
     "version": 1,
