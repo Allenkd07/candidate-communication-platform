@@ -10,13 +10,13 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Dependencies first, so code changes don't invalidate this layer.
+# Install dependencies before copying the source so code changes keep this layer cached.
 COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --frozen --no-install-project --no-dev
 
 COPY . .
 
-# Run as an unprivileged user (Celery warns when run as root).
+# Run as a non-root user; Celery warns when started as root.
 RUN useradd --create-home --uid 1000 app
 USER app
 

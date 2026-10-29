@@ -1,6 +1,6 @@
 /**
- * Design tokens taken from the Figma file (see docs/PLAN.md §0).
- * Components never use these directly; they read them through the MUI theme.
+ * Design tokens from the Figma file.
+ * Components read them through the MUI theme, never directly.
  */
 export const tokens = {
   color: {
@@ -10,8 +10,8 @@ export const tokens = {
     tableHeader: "#F6F6F6",
     rowSelected: "#E3F2FD",
   },
-  // Status chip backgrounds. Read, Failed and Sent are from Figma; the rest are
-  // not in Figma and were picked to sit in the same palette.
+  // Status chip colours. Read, Failed and Sent come from Figma; Queued, Scheduled and
+  // Delivered extend the same palette.
   status: {
     queued: { bg: "#F5F5F5", fg: "#424242" },
     scheduled: { bg: "#F3E5F5", fg: "#6A1B9A" },

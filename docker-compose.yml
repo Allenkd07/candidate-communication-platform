@@ -1,39 +1,48 @@
-# Full local stack: `docker compose up --build`
-#   frontend  http://localhost:3000   (proxies /api to the API; FRONTEND_PORT=3100 to change)
-#   api       http://localhost:8000   (Swagger at /api/docs/)
-#   simulator http://localhost:8001
+# Full local stack. Connection settings come from .env (copy .env.example). Its variable
+# names differ from the services' own .env files, which compose also reads when run from a
+# service directory.
+#   frontend  http://127.0.0.1:3000   proxies /api to the API
+#   api       http://127.0.0.1:8000   Swagger at /api/docs/
+#   simulator http://127.0.0.1:8001
+# The simulator database is created by docker/postgres only when the volume is new;
+# an existing volume without it needs `docker compose down -v`, which deletes all data.
 
 x-backend-env: &backend-env
   DJANGO_SETTINGS_MODULE: config.settings.dev
-  DATABASE_URL: postgres://ccp:ccp@postgres:5432/ccp
-  REDIS_URL: redis://redis:6379/0
+  DATABASE_URL: ${API_DATABASE_URL:?set in .env}
+  REDIS_URL: ${API_REDIS_URL:?set in .env}
 
 x-simulator-env: &simulator-env
   DJANGO_SETTINGS_MODULE: config.settings.dev
-  DATABASE_URL: postgres://ccp:ccp@postgres:5432/simulator
-  REDIS_URL: redis://redis:6379/1
+  DATABASE_URL: ${SIMULATOR_DATABASE_URL:?set in .env}
+  REDIS_URL: ${SIMULATOR_REDIS_URL:?set in .env}
 
 services:
   postgres:
+    restart: unless-stopped
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ccp
-      POSTGRES_PASSWORD: ccp
-      POSTGRES_DB: ccp
-    # Host port 5433: a locally installed Postgres usually owns 5432.
+      POSTGRES_USER: ${POSTGRES_USER:?set in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set in .env}
+    # Host port defaults to 5433 so it does not clash with a locally installed Postgres on 5432.
     ports: ["${POSTGRES_HOST_PORT:-5433}:5432"]
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ccp"]
+      # Queries the simulator database over TCP. The image's temporary init server listens on
+      # the Unix socket only, and pg_isready succeeds even for a missing database, so a real
+      # query is the only check that init finished and created it.
+      test: ["CMD-SHELL", "PGPASSWORD=$$POSTGRES_PASSWORD psql -h 127.0.0.1 -U $$POSTGRES_USER -d simulator -tAc 'SELECT 1'"]
       interval: 5s
       timeout: 3s
       retries: 10
 
   redis:
+    restart: unless-stopped
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    ports: ["${REDIS_HOST_PORT:-6379}:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -41,7 +50,9 @@ services:
       retries: 10
 
   api:
+    restart: unless-stopped
     build: ./backend
+    image: ccp-backend
     command: sh -c "python manage.py migrate --noinput && uvicorn config.asgi:application --host 0.0.0.0 --port 8000"
     environment: *backend-env
     ports: ["8000:8000"]
@@ -50,7 +61,9 @@ services:
       redis: { condition: service_healthy }
 
   worker:
-    build: ./backend
+    restart: unless-stopped
+    image: ccp-backend   # built by the api service
+    pull_policy: never
     command: celery -A config worker --loglevel=info
     environment: *backend-env
     depends_on:
@@ -58,14 +71,18 @@ services:
       redis: { condition: service_healthy }
 
   beat:
-    build: ./backend
+    restart: unless-stopped
+    image: ccp-backend   # built by the api service
+    pull_policy: never
     command: celery -A config beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     environment: *backend-env
     depends_on:
       redis: { condition: service_healthy }
 
   provider-simulator:
+    restart: unless-stopped
     build: ./provider-simulator
+    image: ccp-provider-simulator
     command: sh -c "python manage.py migrate --noinput && uvicorn config.asgi:application --host 0.0.0.0 --port 8001"
     environment: *simulator-env
     ports: ["8001:8001"]
@@ -74,7 +91,9 @@ services:
       redis: { condition: service_healthy }
 
   provider-simulator-worker:
-    build: ./provider-simulator
+    restart: unless-stopped
+    image: ccp-provider-simulator   # built by the provider-simulator service
+    pull_policy: never
     command: celery -A config worker --loglevel=info
     environment: *simulator-env
     depends_on:
@@ -82,10 +101,11 @@ services:
       redis: { condition: service_healthy }
 
   frontend:
+    restart: unless-stopped
     build:
       context: ./frontend
       args:
-        API_ORIGIN: http://api:8000
+        API_ORIGIN: ${FRONTEND_API_ORIGIN:?set in .env}
     ports: ["${FRONTEND_PORT:-3000}:3000"]
     depends_on: [api]
 

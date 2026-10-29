@@ -1,7 +1,7 @@
 from django.urls import URLPattern, URLResolver, include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
-v1_patterns: list[URLPattern | URLResolver] = []  # feature routes are added here from Phase 1
+v1_patterns: list[URLPattern | URLResolver] = []
 
 urlpatterns = [
     path("v1/", include((v1_patterns, "v1"))),

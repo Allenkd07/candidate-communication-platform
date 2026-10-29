@@ -1,4 +1,8 @@
-"""Settings shared by every environment. Values come from env vars (see .env.example)."""
+"""Settings shared by every environment.
+
+Connection URLs have no defaults: a missing DATABASE_URL or REDIS_URL fails at startup.
+See .env.example for the variables.
+"""
 
 from pathlib import Path
 
@@ -55,7 +59,7 @@ TEMPLATES = [
 ]
 
 DATABASES = {
-    "default": env.db("DATABASE_URL", default="postgres://ccp:ccp@127.0.0.1:5433/ccp"),
+    "default": env.db("DATABASE_URL"),
 }
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -75,7 +79,7 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # --- Django REST Framework ---------------------------------------------------
-# Permissions come from here, not per view, so adding auth later is one change.
+# Authentication and permissions are global defaults, so enabling auth needs no per-view changes.
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": [],
@@ -94,7 +98,7 @@ SPECTACULAR_SETTINGS = {
 }
 
 # --- Celery ------------------------------------------------------------------
-REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
+REDIS_URL = env("REDIS_URL")
 CELERY_BROKER_URL = REDIS_URL
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1

@@ -26,7 +26,8 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U ccp" --health-interval 5s --health-timeout 3s --health-retries 10
     env:
-      DATABASE_URL: postgres://ccp:ccp@localhost:5432/ccp
+      DATABASE_URL: postgres://ccp:ccp@127.0.0.1:5432/ccp
+      REDIS_URL: redis://127.0.0.1:6379/0
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v9.0.0
@@ -58,7 +59,8 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U ccp" --health-interval 5s --health-timeout 3s --health-retries 10
     env:
-      DATABASE_URL: postgres://ccp:ccp@localhost:5432/simulator
+      DATABASE_URL: postgres://ccp:ccp@127.0.0.1:5432/simulator
+      REDIS_URL: redis://127.0.0.1:6379/1
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v9.0.0
@@ -79,6 +81,8 @@ jobs:
     defaults:
       run:
         working-directory: frontend
+    env:
+      API_ORIGIN: http://127.0.0.1:8000
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -96,4 +100,5 @@ jobs:
     needs: [backend, provider-simulator, frontend]
     steps:
       - uses: actions/checkout@v7
+      - run: cp .env.example .env
       - run: docker compose build

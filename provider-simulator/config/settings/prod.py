@@ -10,7 +10,7 @@ if not SECRET_KEY:
 
 CSRF_TRUSTED_ORIGINS: list[str] = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 
-# TLS terminates at Caddy, which forwards the original scheme.
+# TLS terminates at the reverse proxy, which forwards the original scheme in this header.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True

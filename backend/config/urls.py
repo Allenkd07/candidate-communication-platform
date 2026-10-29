@@ -9,5 +9,5 @@ urlpatterns: list[URLPattern | URLResolver] = [
 ]
 
 if settings.DEBUG:
-    # uvicorn doesn't serve static files; in dev Django does it (admin, browsable API)
+    # uvicorn does not serve static files, so Django serves them when DEBUG is on.
     urlpatterns += staticfiles_urlpatterns()
