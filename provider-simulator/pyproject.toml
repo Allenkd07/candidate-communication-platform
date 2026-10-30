@@ -9,6 +9,7 @@ dependencies = [
     "djangorestframework>=3.18.3",
     "psycopg[binary]>=3.3.6",
     "redis>=8.1.0",
+    "requests>=2.34.2",
     "uvicorn[standard]>=0.54.0",
 ]
 
@@ -19,7 +20,9 @@ dev = [
     "mypy>=2.4.1",
     "pytest>=9.2.0",
     "pytest-django>=4.14.0",
+    "responses>=0.26.3",
     "ruff>=0.17.3",
+    "types-requests>=2.33.0.20261006",
 ]
 
 [tool.ruff]
@@ -29,6 +32,10 @@ extend-exclude = ["**/migrations/*"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "DJ", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Django declares Meta options as plain class-level lists.
+"**/models.py" = ["RUF012"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["config", "simulator"]
@@ -42,6 +49,11 @@ exclude = ["migrations/"]
 [[tool.mypy.overrides]]
 module = ["celery.*", "environ.*"]
 ignore_missing_imports = true
+
+# Celery ships no type information, so its task decorators are untyped.
+[[tool.mypy.overrides]]
+module = ["simulator.*.tasks"]
+disallow_untyped_decorators = false
 
 [tool.django-stubs]
 django_settings_module = "config.settings.test"

@@ -20,6 +20,8 @@ x-simulator-env: &simulator-env
   DJANGO_SETTINGS_MODULE: config.settings.dev
   DATABASE_URL: ${SIMULATOR_DATABASE_URL:?set in .env}
   REDIS_URL: ${SIMULATOR_REDIS_URL:?set in .env}
+  SIMULATOR_API_KEY: ${SHARED_SIMULATOR_API_KEY:?set in .env}
+  SIMULATOR_WEBHOOK_SECRET: ${SHARED_SIMULATOR_WEBHOOK_SECRET:?set in .env}
 
 services:
   postgres:

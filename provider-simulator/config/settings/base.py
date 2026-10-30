@@ -1,6 +1,6 @@
 """Provider simulator settings shared by every environment.
 
-Connection URLs have no defaults: a missing DATABASE_URL or REDIS_URL fails at startup.
+Connection URLs and credentials have no defaults: a missing one fails at startup.
 See .env.example for the variables.
 """
 
@@ -27,10 +27,13 @@ INSTALLED_APPS = [
     "rest_framework",
     "simulator.core",
     "simulator.health",
+    "simulator.messaging",
+    "simulator.faults",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "simulator.faults.middleware.LatencyMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -80,11 +83,12 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # --- Django REST Framework ---------------------------------------------------
 # Authentication and permissions are global defaults, so enabling auth needs no per-view changes.
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": [],
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["simulator.core.authentication.ApiKeyAuthentication"],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
     "UNAUTHENTICATED_USER": None,
+    "EXCEPTION_HANDLER": "simulator.core.errors.api_exception_handler",
 }
 
 # --- Celery ------------------------------------------------------------------
@@ -94,6 +98,30 @@ CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_IGNORE_RESULT = True
 CELERY_TIMEZONE = TIME_ZONE
+
+# --- Provider behaviour ------------------------------------------------------
+# Platform clients authenticate with this key (Authorization: Bearer <key>).
+SIMULATOR_API_KEY = env("SIMULATOR_API_KEY")
+# Shared with the platform, which verifies the HMAC signature on every webhook.
+SIMULATOR_WEBHOOK_SECRET = env("SIMULATOR_WEBHOOK_SECRET")
+
+# Each lifecycle step (accepted -> sent -> delivered -> read) waits a random delay in this range.
+LIFECYCLE_MIN_DELAY_SECONDS = env.float("LIFECYCLE_MIN_DELAY_SECONDS", default=1.0)
+LIFECYCLE_MAX_DELAY_SECONDS = env.float("LIFECYCLE_MAX_DELAY_SECONDS", default=4.0)
+
+# Share of webhooks delivered twice, and share held back so they arrive after the next one.
+WEBHOOK_DUPLICATE_RATE = env.float("WEBHOOK_DUPLICATE_RATE", default=0.1)
+WEBHOOK_OUT_OF_ORDER_RATE = env.float("WEBHOOK_OUT_OF_ORDER_RATE", default=0.1)
+WEBHOOK_OUT_OF_ORDER_DELAY_SECONDS = 10.0
+WEBHOOK_TIMEOUT_SECONDS = 5.0
+# A webhook the platform does not accept is retried with exponential backoff, then dropped.
+WEBHOOK_MAX_RETRIES = 8
+WEBHOOK_RETRY_MAX_DELAY_SECONDS = 60.0
+
+# Test-number behaviour: the flaky number fails this many attempts per idempotency key,
+# the rate-limited number throttles its first attempt with this Retry-After.
+FLAKY_FAILED_ATTEMPTS = 2
+RATE_LIMIT_RETRY_AFTER_SECONDS = 5
 
 LOGGING = {
     "version": 1,
