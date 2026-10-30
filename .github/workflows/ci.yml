@@ -32,6 +32,7 @@ jobs:
       SIMULATOR_API_URL: http://simulator.test
       SIMULATOR_API_KEY: ci-simulator-api-key
       SIMULATOR_WEBHOOK_SECRET: ci-simulator-webhook-secret
+      RESEND_API_KEY: ""
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v9.0.0
