@@ -63,12 +63,7 @@ class SimulatorGateway(MessagingGateway):
             "idempotency_key": request.idempotency_key,
             "callback_url": request.callback_url,
         }
-        data = self._request(
-            "POST",
-            "/v1/messages",
-            json=payload,
-            headers={"Idempotency-Key": request.idempotency_key},
-        )
+        data = self._request("POST", "/v1/messages", json=payload)
         try:
             return SendResult(provider_message_id=str(data["id"]))
         except KeyError as exc:

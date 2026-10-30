@@ -58,7 +58,6 @@ def test_send_posts_the_message_with_auth_and_idempotency_key(gateway: Simulator
     assert result.provider_message_id == "msg_1"
     [call] = responses.calls
     assert call.request.headers["Authorization"] == f"Bearer {settings.SIMULATOR_API_KEY}"
-    assert call.request.headers["Idempotency-Key"] == "key-1"
     assert json.loads(call.request.body or b"") == {
         "to": "+919845012345",
         "body": "Hello",
