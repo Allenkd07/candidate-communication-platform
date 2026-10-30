@@ -36,6 +36,41 @@ def test_send_returns_202_with_every_recipient_queued(
     assert len(enqueued) == 3
 
 
+def test_resending_with_the_same_key_returns_the_first_batch(
+    client: Client,
+    monkeypatch: pytest.MonkeyPatch,
+    django_capture_on_commit_callbacks: DjangoCaptureOnCommitCallbacks,
+) -> None:
+    enqueued: list[uuid.UUID] = []
+    monkeypatch.setattr(dispatch, "message_enqueue_send", enqueued.append)
+    candidates = CandidateFactory.create_batch(2)
+    payload = {
+        "candidate_ids": [str(c.id) for c in candidates],
+        "body": "Interview tomorrow?",
+        "idempotency_key": str(uuid.uuid4()),
+    }
+
+    with django_capture_on_commit_callbacks(execute=True):
+        first = client.post("/api/v1/messages/", payload, content_type="application/json")
+        repeat = client.post("/api/v1/messages/", payload, content_type="application/json")
+
+    assert first.status_code == repeat.status_code == 202
+    assert repeat.json()["id"] == first.json()["id"]
+    assert Message.objects.count() == 2
+    assert len(enqueued) == 2
+
+
+def test_sends_without_a_key_are_independent(client: Client) -> None:
+    candidate = CandidateFactory.create()
+    payload = {"candidate_ids": [str(candidate.id)], "body": "Interview tomorrow?"}
+
+    first = client.post("/api/v1/messages/", payload, content_type="application/json")
+    second = client.post("/api/v1/messages/", payload, content_type="application/json")
+
+    assert first.json()["id"] != second.json()["id"]
+    assert Message.objects.count() == 2
+
+
 def test_send_validates_input(client: Client) -> None:
     response = client.post(
         "/api/v1/messages/", {"candidate_ids": [], "body": ""}, content_type="application/json"

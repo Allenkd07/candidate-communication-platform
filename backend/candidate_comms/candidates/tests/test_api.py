@@ -82,7 +82,12 @@ def test_list_shows_the_latest_message(client: Client) -> None:
     candidate = CandidateFactory.create()
     older = MessageFactory.create(candidate=candidate, status=MessageStatus.READ)
     Message.objects.filter(id=older.id).update(created_at=timezone.now() - timedelta(days=2))
-    MessageFactory.create(candidate=candidate, status=MessageStatus.FAILED, body="Latest")
+    MessageFactory.create(
+        candidate=candidate,
+        status=MessageStatus.FAILED,
+        body="Latest",
+        failure_reason="Message couldn't be delivered to the handset.",
+    )
     CandidateFactory.create()
 
     rows = {row["id"]: row for row in client.get(LIST_URL).json()["results"]}
@@ -90,6 +95,7 @@ def test_list_shows_the_latest_message(client: Client) -> None:
     row = rows[str(candidate.id)]
     assert row["last_message_status"] == "failed"
     assert row["last_message_body"] == "Latest"
+    assert row["last_message_failure_reason"] == "Message couldn't be delivered to the handset."
     assert row["last_message_at"] is not None
     assert [r["last_message_status"] for r in rows.values() if r["id"] != str(candidate.id)] == [
         None
@@ -106,6 +112,69 @@ def test_search_matches_name_email_phone_digits_and_code(client: Client, search:
     results = client.get(LIST_URL, {"search": search}).json()["results"]
 
     assert [row["id"] for row in results] == [str(taylor.id)]
+
+
+@pytest.mark.parametrize(
+    ("params", "expected"),
+    [
+        ({"name": "tay"}, ["taylor"]),
+        ({"phone": "98450 12"}, ["taylor"]),
+        ({"code": "b2c"}, ["taylor"]),
+        ({"status": ["failed"]}, ["aarav"]),
+        ({"status": ["read", "none"]}, ["taylor", "meera"]),
+        ({"name": "a", "status": ["none"]}, ["meera"]),
+    ],
+)
+def test_column_filters(
+    client: Client, params: dict[str, str | list[str]], expected: list[str]
+) -> None:
+    people = {
+        "taylor": CandidateFactory.create(
+            full_name="Taylor Swift", phone="+919845012345", code="A1B2C3"
+        ),
+        "aarav": CandidateFactory.create(full_name="Aarav Sharma", phone="+917012345678"),
+        "meera": CandidateFactory.create(full_name="Meera Kapoor", phone="+918800765432"),
+    }
+    MessageFactory.create(candidate=people["taylor"], status=MessageStatus.READ)
+    MessageFactory.create(candidate=people["aarav"], status=MessageStatus.FAILED)
+
+    results = client.get(LIST_URL, params).json()["results"]
+
+    ids = {str(candidate.id): key for key, candidate in people.items()}
+    assert sorted(ids[row["id"]] for row in results) == sorted(expected)
+
+
+def test_last_message_date_range_uses_the_latest_message(client: Client) -> None:
+    now = timezone.now()
+    recent = CandidateFactory.create()
+    MessageFactory.create(candidate=recent)
+    earlier = CandidateFactory.create()
+    old_message = MessageFactory.create(candidate=earlier)
+    Message.objects.filter(id=old_message.id).update(created_at=now - timedelta(days=5))
+    CandidateFactory.create()
+
+    def ids(params: dict[str, str]) -> list[str]:
+        return [row["id"] for row in client.get(LIST_URL, params).json()["results"]]
+
+    since_yesterday = {"last_message_after": (now - timedelta(days=1)).isoformat()}
+    until_yesterday = {"last_message_before": (now - timedelta(days=1)).isoformat()}
+    assert ids(since_yesterday) == [str(recent.id)]
+    assert ids(until_yesterday) == [str(earlier.id)]
+
+
+def test_filters_reject_bad_values(client: Client) -> None:
+    now = timezone.now()
+    reversed_range = {
+        "last_message_after": now.isoformat(),
+        "last_message_before": (now - timedelta(days=1)).isoformat(),
+    }
+
+    bad_status = client.get(LIST_URL, {"status": "unknown"})
+    bad_phone = client.get(LIST_URL, {"phone": "abc"})
+    bad_range = client.get(LIST_URL, reversed_range)
+
+    assert bad_status.status_code == bad_phone.status_code == bad_range.status_code == 400
+    assert set(bad_range.json()["error"]["fields"]) == {"last_message_before"}
 
 
 def test_detail_and_unknown_candidate(client: Client) -> None:

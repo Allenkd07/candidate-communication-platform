@@ -33,6 +33,12 @@ class MessageBatch(BaseModel):
     body = models.TextField(max_length=MESSAGE_BODY_MAX_LENGTH)
     channel = models.CharField(max_length=16, choices=Channel.choices)
     gateway = models.CharField(max_length=32, help_text="Registry name of the gateway used")
+    idempotency_key = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
+        help_text="Client-chosen key; a repeated send with the same key returns this batch",
+    )
 
     class Meta:
         ordering = ["-created_at"]

@@ -106,6 +106,10 @@ SPECTACULAR_SETTINGS = {
         "MessageStatusEnum": "candidate_comms.communications.models.MessageStatus",
         "ChannelEnum": "candidate_comms.communications.models.Channel",
     },
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "candidate_comms.api.schema.add_error_envelope",
+    ],
 }
 
 # --- Celery ------------------------------------------------------------------

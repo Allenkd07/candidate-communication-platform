@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 
 from candidate_comms.core.pagination import paginated_response
 
-from .selectors import candidate_get, candidate_list
+from .selectors import CandidateFilters, candidate_get, candidate_list
 from .serializers import (
     CandidateBulkDeleteInputSerializer,
     CandidateBulkDeleteOutputSerializer,
@@ -37,7 +37,18 @@ class CandidateListCreateApi(APIView):
     def get(self, request: Request) -> Response:
         filters = CandidateListFilterSerializer(data=request.query_params)
         filters.is_valid(raise_exception=True)
-        queryset = candidate_list(search=filters.validated_data["search"])
+        data = filters.validated_data
+        queryset = candidate_list(
+            search=data["search"],
+            filters=CandidateFilters(
+                name=data["name"],
+                phone=data["phone"],
+                code=data["code"],
+                statuses=data["status"],
+                last_message_after=data["last_message_after"],
+                last_message_before=data["last_message_before"],
+            ),
+        )
         return paginated_response(
             queryset=queryset,
             serializer_class=CandidateListOutputSerializer,

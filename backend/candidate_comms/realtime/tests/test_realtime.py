@@ -1,11 +1,13 @@
+import asyncio
 import json
 
 import pytest
 import redis
+from django.test import RequestFactory
 
 from candidate_comms.conftest import PublishedEvents
 from candidate_comms.realtime import publisher
-from candidate_comms.realtime.views import format_sse
+from candidate_comms.realtime.views import event_stream_view, format_sse
 
 
 def test_format_sse_uses_named_events() -> None:
@@ -27,3 +29,11 @@ def test_publish_failures_are_swallowed(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(publisher, "_client", BrokenRedis)
 
     publisher.publish("message.status", {"status": "sent"})
+
+
+def test_stream_forbids_proxy_compression() -> None:
+    # A compressing proxy buffers the stream, so events would never reach the browser.
+    response = asyncio.run(event_stream_view(RequestFactory().get("/api/v1/events/")))
+
+    assert response["Content-Type"] == "text/event-stream"
+    assert "no-transform" in response["Cache-Control"]

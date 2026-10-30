@@ -14,6 +14,14 @@ class MessageSendInputSerializer(serializers.Serializer[Any]):
     )
     body = serializers.CharField(max_length=MESSAGE_BODY_MAX_LENGTH)
     channel = serializers.ChoiceField(choices=Channel.choices, default=Channel.SMS)
+    idempotency_key = serializers.UUIDField(
+        required=False,
+        default=None,
+        help_text=(
+            "A new UUID per message. Resending with the same key (for example after a lost "
+            "response) returns the original batch instead of messaging everyone again."
+        ),
+    )
 
 
 class MessageOutputSerializer(serializers.Serializer[Any]):

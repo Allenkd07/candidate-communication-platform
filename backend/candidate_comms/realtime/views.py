@@ -37,6 +37,8 @@ async def _event_stream() -> AsyncIterator[str]:
 async def event_stream_view(request: HttpRequest) -> StreamingHttpResponse:
     """Server-Sent Events stream of message status changes (`message.status`)."""
     response = StreamingHttpResponse(_event_stream(), content_type="text/event-stream")
-    response["Cache-Control"] = "no-cache"
+    # no-transform stops proxies (including the Next dev server) from compressing the stream,
+    # which would buffer events until the connection closes.
+    response["Cache-Control"] = "no-cache, no-transform"
     response["X-Accel-Buffering"] = "no"
     return response

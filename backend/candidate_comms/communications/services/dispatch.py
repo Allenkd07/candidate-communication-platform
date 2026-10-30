@@ -8,7 +8,7 @@ from functools import partial
 from uuid import UUID
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 
@@ -54,12 +54,21 @@ def _validate_send(*, candidate_ids: Sequence[UUID], body: str) -> tuple[list[UU
     return unique_ids, body
 
 
-def batch_create(*, candidate_ids: Sequence[UUID], body: str, channel: Channel) -> MessageBatch:
+def batch_create(
+    *,
+    candidate_ids: Sequence[UUID],
+    body: str,
+    channel: Channel,
+    idempotency_key: UUID | None = None,
+) -> MessageBatch:
     """Create a batch with one QUEUED message per candidate, then enqueue one task each.
 
     Tasks are enqueued after commit, so a worker never picks up an unsaved message, and one
-    failing recipient never blocks the others.
+    failing recipient never blocks the others. A send repeated with the same idempotency key
+    returns the first batch and messages nobody again.
     """
+    if idempotency_key and (existing := _batch_with_key(idempotency_key)):
+        return existing
     unique_ids, body = _validate_send(candidate_ids=candidate_ids, body=body)
     gateway = default_gateway_name(channel)
     now = timezone.now()
@@ -77,7 +86,16 @@ def batch_create(*, candidate_ids: Sequence[UUID], body: str, channel: Channel) 
                 fields={"candidate_ids": missing},
             )
 
-        batch = MessageBatch.objects.create(body=body, channel=channel, gateway=gateway)
+        try:
+            with transaction.atomic():
+                batch = MessageBatch.objects.create(
+                    body=body, channel=channel, gateway=gateway, idempotency_key=idempotency_key
+                )
+        except IntegrityError:
+            # A concurrent send with the same key committed first.
+            if idempotency_key and (existing := _batch_with_key(idempotency_key)):
+                return existing
+            raise
         messages = Message.objects.bulk_create(
             Message(
                 batch=batch,
@@ -104,6 +122,10 @@ def batch_create(*, candidate_ids: Sequence[UUID], body: str, channel: Channel) 
         for message in messages:
             transaction.on_commit(partial(message_enqueue_send, message.id))
     return batch
+
+
+def _batch_with_key(idempotency_key: UUID) -> MessageBatch | None:
+    return MessageBatch.objects.filter(idempotency_key=idempotency_key).first()
 
 
 @dataclass(frozen=True)
