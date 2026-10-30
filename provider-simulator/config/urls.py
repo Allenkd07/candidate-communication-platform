@@ -1,8 +1,10 @@
 from django.urls import URLPattern, URLResolver, include, path, re_path
 
 from simulator.core.views import page_not_found
+from simulator.health.views import ServiceIndexApi
 
 urlpatterns: list[URLPattern | URLResolver] = [
+    path("", ServiceIndexApi.as_view(), name="index"),
     path("health", include("simulator.health.urls")),
     path("v1/", include("simulator.messaging.urls")),
     # Demo control for fault injection; not part of a real vendor's API, hence the _demo prefix.
