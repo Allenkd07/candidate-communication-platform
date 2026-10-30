@@ -17,8 +17,10 @@ from candidate_comms.communications.models import (
     MessageBatch,
     MessageEvent,
     MessageStatus,
+    MessageTemplate,
 )
 from candidate_comms.communications.services.delivery import Failure, message_apply_status
+from candidate_comms.communications.services.templates import template_create
 from candidate_comms.integrations.messaging.exceptions import DeliveryFailedError
 from candidate_comms.integrations.messaging.registry import default_gateway_name
 
@@ -40,6 +42,27 @@ TEST_NUMBER_CANDIDATES: list[tuple[str, str, str]] = [
     ("Test Flaky Provider", "+919876522222", "test.flaky@example.com"),
     ("Test Rate Limited", "+919876533333", "test.rate-limited@example.com"),
     ("Test Never Read", "+919876544444", "test.never-read@example.com"),
+    # Resend's test inboxes for the email channel.
+    ("Test Email Delivered", "+919876566661", "delivered@resend.dev"),
+    ("Test Email Bounced", "+919876566662", "bounced@resend.dev"),
+]
+
+TEMPLATES: list[tuple[str, str]] = [
+    (
+        "Interview invite",
+        "Hi {{first_name}}, thanks for applying. Are you free for a 30-minute call this week? "
+        "Reply with a time that suits you.",
+    ),
+    (
+        "Interview reminder",
+        "Hi {{first_name}}, a reminder that your interview is tomorrow. "
+        "Please join a few minutes early.",
+    ),
+    (
+        "Documents needed",
+        "Hello {{full_name}}, please share your updated CV and ID proof so we can move "
+        "your application forward.",
+    ),
 ]
 
 HISTORY_BODY = "Hi {first_name}, thanks for applying. Are you free for a call this week?"
@@ -79,7 +102,15 @@ class Command(BaseCommand):
                 candidate_create(full_name=full_name, phone=phone, email=email)
                 created += 1
 
-        self.stdout.write(self.style.SUCCESS(f"Created {created} candidates"))
+        templates = 0
+        for name, body in TEMPLATES:
+            if not MessageTemplate.objects.filter(name__iexact=name).exists():
+                template_create(name=name, body=body)
+                templates += 1
+
+        self.stdout.write(
+            self.style.SUCCESS(f"Created {created} candidates, {templates} templates")
+        )
 
 
 def _seed_history(candidate: Candidate, final_status: MessageStatus, *, days_ago: int) -> None:

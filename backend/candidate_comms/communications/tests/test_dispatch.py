@@ -183,3 +183,17 @@ def test_retry_delay_backs_off_exponentially_with_jitter(retries: int, ceiling: 
     ]
 
     assert all(1.0 <= delay <= ceiling for delay in delays)
+
+
+def test_a_message_for_a_provider_no_longer_configured_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    message = MessageFactory.create(gateway="resend", channel="email")
+
+    result = dispatch.message_send_attempt(message_id=message.id)
+
+    message.refresh_from_db()
+    assert not result.sent
+    assert message.status == MessageStatus.FAILED
+    assert message.failure_reason == "Not sent: Email isn't set up."
+    assert not message.is_retryable

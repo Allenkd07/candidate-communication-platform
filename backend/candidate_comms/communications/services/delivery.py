@@ -13,6 +13,7 @@ from candidate_comms.integrations.messaging.exceptions import GatewayError
 from candidate_comms.realtime.publisher import publish
 
 from ..models import EventSource, Message, MessageEvent, MessageStatus
+from ..selectors import RETRYABLE
 from ..state_machine import Transition, evaluate
 
 logger = logging.getLogger(__name__)
@@ -135,6 +136,7 @@ def message_status_payload(message: Message) -> dict[str, Any]:
         "failure_code": message.failure_code,
         "failure_reason": message.failure_reason,
         "is_retryable": message.is_retryable,
+        "can_retry": Message.objects.filter(RETRYABLE, id=message.id).exists(),
     }
 
 

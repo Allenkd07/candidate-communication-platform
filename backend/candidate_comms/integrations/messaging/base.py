@@ -58,6 +58,9 @@ class MessagingGateway(ABC):
     """A messaging vendor. Implementations raise only GatewayError subclasses."""
 
     name: str
+    # Shown to recruiters.
+    label: str
+    channel: str
 
     @abstractmethod
     def send(self, request: SendRequest) -> SendResult:

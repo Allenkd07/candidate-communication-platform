@@ -37,11 +37,14 @@ class FakeGateway(MessagingGateway):
     """In-memory gateway: `send_outcomes` are consumed one per send (an error is raised)."""
 
     name = "simulator"
+    label = "SMS"
+    channel = "sms"
 
     def __init__(self) -> None:
         self.sent: list[SendRequest] = []
         self.send_outcomes: list[GatewayError | None] = []
         self.statuses: dict[str, StatusEvent | None] = {}
+        self.health_result = GatewayHealth(status=HealthStatus.OPERATIONAL)
 
     def send(self, request: SendRequest) -> SendResult:
         self.sent.append(request)
@@ -57,7 +60,7 @@ class FakeGateway(MessagingGateway):
         return self.statuses.get(provider_message_id)
 
     def health(self) -> GatewayHealth:
-        return GatewayHealth(status=HealthStatus.OPERATIONAL)
+        return self.health_result
 
 
 @pytest.fixture(autouse=True)

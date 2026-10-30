@@ -1,15 +1,18 @@
 import uuid
 
 from django.db import models
+from django.db.models.functions import Lower
 
 from candidate_comms.candidates.models import Candidate
 from candidate_comms.core.models import BaseModel
 
 MESSAGE_BODY_MAX_LENGTH = 1000
+TEMPLATE_NAME_MAX_LENGTH = 60
 
 
 class Channel(models.TextChoices):
     SMS = "sms", "SMS"
+    EMAIL = "email", "Email"
 
 
 class MessageStatus(models.TextChoices):
@@ -60,6 +63,7 @@ class Message(BaseModel):
         max_length=16, choices=MessageStatus.choices, default=MessageStatus.QUEUED
     )
     status_changed_at = models.DateTimeField()
+    scheduled_for = models.DateTimeField(null=True, blank=True)
     # Sent with every attempt so the gateway never delivers the same message twice.
     idempotency_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     provider_message_id = models.CharField(max_length=128, blank=True)
@@ -68,6 +72,10 @@ class Message(BaseModel):
     failure_code = models.CharField(max_length=64, blank=True)
     failure_reason = models.CharField(max_length=255, blank=True, help_text="Recruiter-facing")
     is_retryable = models.BooleanField(default=False, help_text="A manual retry is allowed")
+    # One-to-one: a failed message is retried at most once.
+    retry_of = models.OneToOneField(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="retried_by"
+    )
 
     sent_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
@@ -115,3 +123,19 @@ class MessageEvent(BaseModel):
                 name="unique_provider_event_id_per_gateway",
             ),
         ]
+
+
+class MessageTemplate(BaseModel):
+    """Reusable message text; its placeholders are filled in per recipient when sent."""
+
+    name = models.CharField(max_length=TEMPLATE_NAME_MAX_LENGTH)
+    body = models.TextField(max_length=MESSAGE_BODY_MAX_LENGTH)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(Lower("name"), name="unique_template_name_ci"),
+        ]
+
+    def __str__(self) -> str:
+        return self.name

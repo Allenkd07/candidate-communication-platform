@@ -48,6 +48,8 @@ _REPORTABLE_STATUSES = {status.value for status in DeliveryStatus}
 
 class SimulatorGateway(MessagingGateway):
     name = "simulator"
+    label = "SMS"
+    channel = "sms"
 
     def __init__(self, *, base_url: str, api_key: str, webhook_secret: str, timeout: float) -> None:
         self._base_url = base_url.rstrip("/")

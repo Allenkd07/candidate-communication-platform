@@ -114,3 +114,37 @@ def test_history_of_unknown_candidate_is_not_found(client: Client) -> None:
     response = client.get(f"/api/v1/candidates/{uuid.uuid4()}/messages/")
 
     assert response.status_code == 404
+
+
+def test_a_channel_without_a_provider_is_refused(client: Client) -> None:
+    candidate = CandidateFactory.create()
+    payload = {"candidate_ids": [str(candidate.id)], "body": "Hello", "channel": "email"}
+
+    response = client.post("/api/v1/messages/", payload, content_type="application/json")
+
+    assert response.status_code == 400
+    assert set(response.json()["error"]["fields"]) == {"channel"}
+    assert not Message.objects.exists()
+
+
+def test_email_messages_go_to_the_candidates_email(
+    client: Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(dispatch, "message_enqueue_send", lambda message_id: None)
+    monkeypatch.setattr(
+        dispatch,
+        "default_gateway_name",
+        lambda channel: "resend" if channel == "email" else "simulator",
+    )
+    candidate = CandidateFactory.create(email="taylor@example.com")
+    payload = {"candidate_ids": [str(candidate.id)], "body": "Hello", "channel": "email"}
+
+    response = client.post("/api/v1/messages/", payload, content_type="application/json")
+
+    message = Message.objects.get()
+    assert response.status_code == 202
+    assert (message.channel, message.gateway, message.recipient) == (
+        "email",
+        "resend",
+        "taylor@example.com",
+    )

@@ -7,6 +7,7 @@ See .env.example for the variables.
 from pathlib import Path
 
 import environ
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -105,6 +106,7 @@ SPECTACULAR_SETTINGS = {
     "ENUM_NAME_OVERRIDES": {
         "MessageStatusEnum": "candidate_comms.communications.models.MessageStatus",
         "ChannelEnum": "candidate_comms.communications.models.Channel",
+        "HealthStatusEnum": ["operational", "degraded", "down"],
     },
     "POSTPROCESSING_HOOKS": [
         "drf_spectacular.hooks.postprocess_schema_enums",
@@ -124,6 +126,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "candidate_comms.communications.tasks.reconcile_stale_messages",
         "schedule": 60.0,
     },
+    "release-scheduled-messages": {
+        "task": "candidate_comms.communications.tasks.release_scheduled_messages",
+        "schedule": 30.0,
+    },
 }
 
 # --- Candidates --------------------------------------------------------------
@@ -140,8 +146,21 @@ SIMULATOR_API_KEY = env("SIMULATOR_API_KEY")
 SIMULATOR_WEBHOOK_SECRET = env("SIMULATOR_WEBHOOK_SECRET")
 SIMULATOR_TIMEOUT_SECONDS = env.float("SIMULATOR_TIMEOUT_SECONDS", default=5.0)
 
+# Optional: an empty RESEND_API_KEY turns the email channel off.
+RESEND_API_KEY = env("RESEND_API_KEY")
+if RESEND_API_KEY:
+    RESEND_API_URL = env("RESEND_API_URL")
+    RESEND_FROM = env("RESEND_FROM")
+    RESEND_WEBHOOK_SECRET = env("RESEND_WEBHOOK_SECRET")
+    if not (RESEND_API_URL and RESEND_FROM and RESEND_WEBHOOK_SECRET):
+        raise ImproperlyConfigured(
+            "RESEND_API_URL, RESEND_FROM and RESEND_WEBHOOK_SECRET must be set with RESEND_API_KEY."
+        )
+RESEND_SUBJECT = "Update on your application"
+RESEND_TIMEOUT_SECONDS = 10.0
+
 # Gateway used for each channel when a send request does not name one.
-MESSAGING_DEFAULT_GATEWAYS = {"sms": "simulator"}
+MESSAGING_DEFAULT_GATEWAYS = {"sms": "simulator", **({"email": "resend"} if RESEND_API_KEY else {})}
 
 # Automatic retries for transient gateway errors: exponential backoff with full jitter,
 # capped per attempt. A Retry-After from the gateway takes precedence.

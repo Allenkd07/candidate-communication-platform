@@ -6,6 +6,7 @@ from django.conf import settings
 from .services.delivery import Failure
 from .services.dispatch import message_fail, message_send_attempt, retry_delay_seconds
 from .services.reconciliation import stale_messages_reconcile
+from .services.scheduling import scheduled_messages_release
 
 
 @shared_task(bind=True, max_retries=settings.MESSAGE_SEND_MAX_RETRIES)
@@ -31,3 +32,9 @@ def reconcile_stale_messages() -> dict[str, int]:
         "requeued": result.requeued,
         "abandoned": result.abandoned,
     }
+
+
+@shared_task
+def release_scheduled_messages() -> dict[str, int]:
+    result = scheduled_messages_release()
+    return {"released": result.released, "cancelled": result.cancelled}

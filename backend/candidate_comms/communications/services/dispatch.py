@@ -4,6 +4,7 @@ import logging
 import random
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from functools import partial
 from uuid import UUID
 
@@ -16,7 +17,11 @@ from candidate_comms.candidates.models import Candidate
 from candidate_comms.core.exceptions import ApplicationError, ErrorCode
 from candidate_comms.integrations.messaging.base import SendRequest
 from candidate_comms.integrations.messaging.exceptions import GatewayError
-from candidate_comms.integrations.messaging.registry import default_gateway_name, get_gateway
+from candidate_comms.integrations.messaging.registry import (
+    UnknownGatewayError,
+    default_gateway_name,
+    get_gateway,
+)
 
 from ..models import (
     MESSAGE_BODY_MAX_LENGTH,
@@ -27,11 +32,14 @@ from ..models import (
     MessageEvent,
     MessageStatus,
 )
+from ..placeholders import render, unknown_placeholder_error
 from .delivery import Failure, message_apply_status
 
 logger = logging.getLogger(__name__)
 
 MAX_RECIPIENTS = 500
+SCHEDULE_MIN_LEAD = timedelta(minutes=1)
+SCHEDULE_MAX_AHEAD = timedelta(days=30)
 
 
 def message_enqueue_send(message_id: UUID) -> None:
@@ -47,6 +55,8 @@ def _validate_send(*, candidate_ids: Sequence[UUID], body: str) -> tuple[list[UU
     if len(body) > MESSAGE_BODY_MAX_LENGTH:
         limit = f"Use at most {MESSAGE_BODY_MAX_LENGTH} characters."
         raise ApplicationError("Message is too long.", fields={"body": [limit]})
+    if placeholder_error := unknown_placeholder_error(body):
+        raise ApplicationError(placeholder_error, fields={"body": [placeholder_error]})
     unique_ids = list(dict.fromkeys(candidate_ids))
     if not 1 <= len(unique_ids) <= MAX_RECIPIENTS:
         limit = f"Choose between 1 and {MAX_RECIPIENTS} recipients."
@@ -60,18 +70,26 @@ def batch_create(
     body: str,
     channel: Channel,
     idempotency_key: UUID | None = None,
+    scheduled_at: datetime | None = None,
 ) -> MessageBatch:
-    """Create a batch with one QUEUED message per candidate, then enqueue one task each.
+    """Create a batch with one message per candidate, then enqueue one task each.
 
     Tasks are enqueued after commit, so a worker never picks up an unsaved message, and one
     failing recipient never blocks the others. A send repeated with the same idempotency key
-    returns the first batch and messages nobody again.
+    returns the first batch and messages nobody again. A scheduled send stays SCHEDULED until
+    `scheduled_messages_release` queues it.
     """
     if idempotency_key and (existing := _batch_with_key(idempotency_key)):
         return existing
     unique_ids, body = _validate_send(candidate_ids=candidate_ids, body=body)
-    gateway = default_gateway_name(channel)
     now = timezone.now()
+    _validate_schedule(scheduled_at, now=now)
+    status = MessageStatus.SCHEDULED if scheduled_at else MessageStatus.QUEUED
+    try:
+        gateway = default_gateway_name(channel)
+    except UnknownGatewayError:
+        detail = f"Sending by {Channel(channel).label} isn't set up."
+        raise ApplicationError(detail, fields={"channel": [detail]}) from None
 
     with transaction.atomic():
         candidates = Candidate.objects.in_bulk(unique_ids)
@@ -85,6 +103,10 @@ def batch_create(
                 status_code=404,
                 fields={"candidate_ids": missing},
             )
+        bodies = {
+            candidate_id: render(body, candidates[candidate_id]) for candidate_id in unique_ids
+        }
+        _raise_if_too_long(bodies, candidates)
 
         try:
             with transaction.atomic():
@@ -102,10 +124,11 @@ def batch_create(
                 candidate=candidates[candidate_id],
                 channel=channel,
                 gateway=gateway,
-                recipient=candidates[candidate_id].phone,
-                body=body,
-                status=MessageStatus.QUEUED,
+                recipient=recipient_for(candidates[candidate_id], channel),
+                body=bodies[candidate_id],
+                status=status,
                 status_changed_at=now,
+                scheduled_for=scheduled_at,
             )
             for candidate_id in unique_ids
         )
@@ -113,15 +136,44 @@ def batch_create(
             MessageEvent(
                 message=message,
                 source=EventSource.PLATFORM,
-                status=MessageStatus.QUEUED,
+                status=status,
                 applied=True,
                 occurred_at=now,
             )
             for message in messages
         )
-        for message in messages:
-            transaction.on_commit(partial(message_enqueue_send, message.id))
+        if not scheduled_at:
+            for message in messages:
+                transaction.on_commit(partial(message_enqueue_send, message.id))
     return batch
+
+
+def recipient_for(candidate: Candidate, channel: str) -> str:
+    """The address a channel delivers to, captured on the message at send time."""
+    return candidate.email if channel == Channel.EMAIL else candidate.phone
+
+
+def _validate_schedule(scheduled_at: datetime | None, *, now: datetime) -> None:
+    if scheduled_at is None:
+        return
+    if scheduled_at < now + SCHEDULE_MIN_LEAD:
+        detail = "Pick a time at least a minute from now."
+    elif scheduled_at > now + SCHEDULE_MAX_AHEAD:
+        detail = f"Pick a time within the next {SCHEDULE_MAX_AHEAD.days} days."
+    else:
+        return
+    raise ApplicationError(detail, fields={"scheduled_at": [detail]})
+
+
+def _raise_if_too_long(bodies: dict[UUID, str], candidates: dict[UUID, Candidate]) -> None:
+    for candidate_id, text in bodies.items():
+        if len(text) > MESSAGE_BODY_MAX_LENGTH:
+            name = candidates[candidate_id].full_name
+            detail = (
+                f"With {name}'s details filled in, the message is {len(text)} characters. "
+                f"Use at most {MESSAGE_BODY_MAX_LENGTH}."
+            )
+            raise ApplicationError("Message is too long.", fields={"body": [detail]})
 
 
 def _batch_with_key(idempotency_key: UUID) -> MessageBatch | None:
@@ -149,7 +201,16 @@ def message_send_attempt(*, message_id: UUID) -> AttemptResult:
         return AttemptResult(sent=False)
 
     message = Message.objects.get(id=message_id)
-    gateway = get_gateway(message.gateway)
+    try:
+        gateway = get_gateway(message.gateway)
+    except UnknownGatewayError:
+        failure = Failure(
+            code="gateway_not_configured",
+            reason=f"Not sent: {Channel(message.channel).label} isn't set up.",
+            is_retryable=False,
+        )
+        message_fail(message_id=message_id, failure=failure)
+        return AttemptResult(sent=False)
     request = SendRequest(
         recipient=message.recipient,
         body=message.body,
