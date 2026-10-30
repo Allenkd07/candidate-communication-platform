@@ -1,0 +1,790 @@
+openapi: 3.0.3
+info:
+  title: Candidate Communication Platform API
+  version: 1.0.0
+  description: Manage candidates, send messages and track their delivery.
+paths:
+  /api/v1/batches/{batch_id}/:
+    get:
+      operationId: batches_retrieve
+      parameters:
+      - in: path
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - messages
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchOutput'
+          description: ''
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/candidates/:
+    get:
+      operationId: candidates_list
+      parameters:
+      - in: query
+        name: code
+        schema:
+          type: string
+          default: ''
+          maxLength: 6
+        description: Candidate ID contains
+      - in: query
+        name: last_message_after
+        schema:
+          type: string
+          format: date-time
+        description: Latest message sent at or after
+      - in: query
+        name: last_message_before
+        schema:
+          type: string
+          format: date-time
+        description: Latest message sent before
+      - in: query
+        name: name
+        schema:
+          type: string
+          default: ''
+          maxLength: 100
+        description: Name contains
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: 1-based page number
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Items per page, at most 100
+      - in: query
+        name: phone
+        schema:
+          oneOf:
+          - type: string
+            default: ''
+            maxLength: 20
+            pattern: ^[\d\s()+\-]*$
+          - type: string
+            maxLength: 0
+        description: Mobile number contains these digits
+      - in: query
+        name: search
+        schema:
+          type: string
+          default: ''
+          maxLength: 100
+      - in: query
+        name: status
+        schema:
+          type: array
+          items:
+            enum:
+            - scheduled
+            - queued
+            - sent
+            - delivered
+            - read
+            - failed
+            - none
+            type: string
+            description: |-
+              * `scheduled` - scheduled
+              * `queued` - queued
+              * `sent` - sent
+              * `delivered` - delivered
+              * `read` - read
+              * `failed` - failed
+              * `none` - none
+        description: Latest message status is any of these; `none` matches never messaged
+      tags:
+      - candidates
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidatePage'
+          description: ''
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      operationId: candidates_create
+      tags:
+      - candidates
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateCreateInputRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidateOutput'
+          description: ''
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/candidates/{candidate_id}/:
+    get:
+      operationId: candidates_retrieve
+      parameters:
+      - in: path
+        name: candidate_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - candidates
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidateOutput'
+          description: ''
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      operationId: candidates_destroy
+      parameters:
+      - in: path
+        name: candidate_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - candidates
+      security:
+      - {}
+      responses:
+        '204':
+          description: No response body
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/candidates/{candidate_id}/messages/:
+    get:
+      operationId: candidates_messages_list
+      parameters:
+      - in: path
+        name: candidate_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: 1-based page number
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Items per page, at most 100
+      tags:
+      - messages
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagePage'
+          description: ''
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/candidates/bulk-delete/:
+    post:
+      operationId: candidates_bulk_delete
+      tags:
+      - candidates
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateBulkDeleteInputRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidateBulkDeleteOutput'
+          description: ''
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/messages/:
+    post:
+      operationId: messages_send
+      description: Queue one message per candidate. Returns 202 with every recipient,
+        normally still QUEUED; statuses then change asynchronously (follow them via
+        the events stream).
+      tags:
+      - messages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageSendInputRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchOutput'
+          description: ''
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/webhooks/{gateway}/:
+    post:
+      operationId: webhooks_ingest
+      parameters:
+      - in: path
+        name: gateway
+        schema:
+          type: string
+        required: true
+      tags:
+      - webhooks
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookIngestOutput'
+          description: ''
+        '400':
+          description: Malformed payload
+        '401':
+          description: Invalid signature
+        '404':
+          description: Unknown gateway
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    BatchCandidate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        full_name:
+          type: string
+      required:
+      - code
+      - full_name
+      - id
+    BatchMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        batch_id:
+          type: string
+          format: uuid
+        candidate_id:
+          type: string
+          format: uuid
+        channel:
+          $ref: '#/components/schemas/ChannelEnum'
+        recipient:
+          type: string
+        body:
+          type: string
+        status:
+          $ref: '#/components/schemas/MessageStatusEnum'
+        status_changed_at:
+          type: string
+          format: date-time
+        attempt_count:
+          type: integer
+        failure_code:
+          type: string
+        failure_reason:
+          type: string
+        is_retryable:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        sent_at:
+          type: string
+          format: date-time
+          nullable: true
+        delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+        failed_at:
+          type: string
+          format: date-time
+          nullable: true
+        candidate:
+          $ref: '#/components/schemas/BatchCandidate'
+      required:
+      - attempt_count
+      - batch_id
+      - body
+      - candidate
+      - candidate_id
+      - channel
+      - created_at
+      - delivered_at
+      - failed_at
+      - failure_code
+      - failure_reason
+      - id
+      - is_retryable
+      - read_at
+      - recipient
+      - sent_at
+      - status
+      - status_changed_at
+    BatchOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        body:
+          type: string
+        channel:
+          $ref: '#/components/schemas/ChannelEnum'
+        gateway:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        total:
+          type: integer
+        counts:
+          $ref: '#/components/schemas/BatchStatusCounts'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchMessage'
+      required:
+      - body
+      - channel
+      - counts
+      - created_at
+      - gateway
+      - id
+      - messages
+      - total
+    BatchStatusCounts:
+      type: object
+      properties:
+        scheduled:
+          type: integer
+        queued:
+          type: integer
+        sent:
+          type: integer
+        delivered:
+          type: integer
+        read:
+          type: integer
+        failed:
+          type: integer
+      required:
+      - delivered
+      - failed
+      - queued
+      - read
+      - scheduled
+      - sent
+    CandidateBulkDeleteInputRequest:
+      type: object
+      properties:
+        candidate_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 500
+          minItems: 1
+      required:
+      - candidate_ids
+    CandidateBulkDeleteOutput:
+      type: object
+      properties:
+        deleted:
+          type: integer
+      required:
+      - deleted
+    CandidateCreateInputRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 32
+        email:
+          type: string
+          format: email
+          minLength: 1
+      required:
+      - email
+      - full_name
+      - phone
+    CandidateListOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        full_name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        created_at:
+          type: string
+          format: date-time
+        last_message_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_message_status:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/MessageStatusEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        last_message_body:
+          type: string
+          nullable: true
+        last_message_failure_reason:
+          type: string
+          nullable: true
+      required:
+      - code
+      - created_at
+      - email
+      - full_name
+      - id
+      - last_message_at
+      - last_message_body
+      - last_message_failure_reason
+      - last_message_status
+      - phone
+    CandidateOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        full_name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - code
+      - created_at
+      - email
+      - full_name
+      - id
+      - phone
+    CandidatePage:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CandidateListOutput'
+      required:
+      - count
+      - next
+      - previous
+      - results
+    ChannelEnum:
+      enum:
+      - sms
+      type: string
+      description: '* `sms` - SMS'
+    MessageOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        batch_id:
+          type: string
+          format: uuid
+        candidate_id:
+          type: string
+          format: uuid
+        channel:
+          $ref: '#/components/schemas/ChannelEnum'
+        recipient:
+          type: string
+        body:
+          type: string
+        status:
+          $ref: '#/components/schemas/MessageStatusEnum'
+        status_changed_at:
+          type: string
+          format: date-time
+        attempt_count:
+          type: integer
+        failure_code:
+          type: string
+        failure_reason:
+          type: string
+        is_retryable:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        sent_at:
+          type: string
+          format: date-time
+          nullable: true
+        delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+        failed_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - attempt_count
+      - batch_id
+      - body
+      - candidate_id
+      - channel
+      - created_at
+      - delivered_at
+      - failed_at
+      - failure_code
+      - failure_reason
+      - id
+      - is_retryable
+      - read_at
+      - recipient
+      - sent_at
+      - status
+      - status_changed_at
+    MessagePage:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageOutput'
+      required:
+      - count
+      - next
+      - previous
+      - results
+    MessageSendInputRequest:
+      type: object
+      properties:
+        candidate_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 500
+          minItems: 1
+        body:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        channel:
+          allOf:
+          - $ref: '#/components/schemas/ChannelEnum'
+          default: sms
+        idempotency_key:
+          type: string
+          format: uuid
+          description: A new UUID per message. Resending with the same key (for example
+            after a lost response) returns the original batch instead of messaging
+            everyone again.
+      required:
+      - body
+      - candidate_ids
+    MessageStatusEnum:
+      enum:
+      - scheduled
+      - queued
+      - sent
+      - delivered
+      - read
+      - failed
+      type: string
+      description: |-
+        * `scheduled` - Scheduled
+        * `queued` - Queued
+        * `sent` - Sent
+        * `delivered` - Delivered
+        * `read` - Read
+        * `failed` - Failed
+    NullEnum:
+      enum:
+      - null
+    WebhookIngestOutput:
+      type: object
+      properties:
+        received:
+          type: integer
+        applied:
+          type: integer
+        ignored:
+          type: integer
+      required:
+      - applied
+      - ignored
+      - received
+    ErrorCodeEnum:
+      type: string
+      enum:
+      - validation_error
+      - bad_request
+      - parse_error
+      - not_authenticated
+      - permission_denied
+      - not_found
+      - method_not_allowed
+      - not_acceptable
+      - unsupported_media_type
+      - throttled
+      - conflict
+      - duplicate_candidate
+      - invalid_webhook_signature
+      - invalid_webhook_payload
+      - internal_error
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCodeEnum'
+            message:
+              type: string
+            fields:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+          required:
+          - code
+          - message
+          - fields
+      required:
+      - error
