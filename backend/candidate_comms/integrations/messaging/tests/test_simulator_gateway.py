@@ -75,6 +75,7 @@ def test_send_posts_the_message_with_auth_and_idempotency_key(gateway: Simulator
         (500, None, GatewayUnavailableError),
         (401, {"error": {"code": "unauthorized", "message": "no"}}, GatewayRejectedError),
         (400, {"error": {"code": "content_rejected", "message": "no"}}, GatewayRejectedError),
+        (409, {"error": {"code": "idempotency_key_reused", "message": "no"}}, GatewayRejectedError),
     ],
 )
 @responses.activate

@@ -169,7 +169,8 @@ def message_fail(*, message_id: UUID, failure: Failure) -> None:
 def retry_delay_seconds(*, retries: int, error: GatewayError) -> float:
     """Delay before the next automatic retry, given `retries` retries so far.
 
-    Honours the gateway's Retry-After; otherwise exponential backoff with full jitter.
+    Honours the gateway's Retry-After; otherwise exponential backoff with jitter, never
+    less than half the base delay so a retry is never immediate.
     """
     max_delay: float = settings.MESSAGE_RETRY_MAX_DELAY_SECONDS
     if error.retry_after is not None:
