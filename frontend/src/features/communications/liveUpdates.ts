@@ -100,6 +100,6 @@ export function applyEvent<T extends { status_changed_at: string }>(message: T, 
 }
 
 function pickStatus(event: MessageStatusEvent) {
-  const { status, status_changed_at, failure_code, failure_reason, is_retryable } = event;
-  return { status, status_changed_at, failure_code, failure_reason, is_retryable };
+  const { status, status_changed_at, failure_code, failure_reason, is_retryable, can_retry } = event;
+  return { status, status_changed_at, failure_code, failure_reason, is_retryable, can_retry };
 }

@@ -31,6 +31,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/batches/{batch_id}/retry-failed/:
+    post:
+      operationId: batches_retry_failed
+      description: Send every retryable failed message of a batch again; 409 if there
+        are none.
+      parameters:
+      - in: path
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - messages
+      security:
+      - {}
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchOutput'
+          description: ''
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/candidates/:
     get:
       operationId: candidates_list
@@ -294,6 +323,161 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/messages/{message_id}/retry/:
+    post:
+      operationId: messages_retry
+      description: Send a failed message again as a new message in the same batch.
+        Returns the batch, in which the retry replaces the failed message. 409 not_retryable
+        when the failure doesn't allow a retry, it was already retried, or the candidate
+        was deleted.
+      parameters:
+      - in: path
+        name: message_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - messages
+      security:
+      - {}
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchOutput'
+          description: ''
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/providers/health/:
+    get:
+      operationId: providers_health
+      description: Whether each messaging provider is reachable (operational, degraded
+        or down) and its message counts over the last 24 hours.
+      tags:
+      - messages
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceHealth'
+          description: ''
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/templates/:
+    get:
+      operationId: templates_list
+      tags:
+      - templates
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TemplateOutput'
+          description: ''
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      operationId: templates_create
+      tags:
+      - templates
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateInputRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateOutput'
+          description: ''
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/templates/{template_id}/:
+    put:
+      operationId: templates_update
+      parameters:
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - templates
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateInputRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateOutput'
+          description: ''
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      operationId: templates_delete
+      parameters:
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - templates
+      security:
+      - {}
+      responses:
+        '204':
+          description: No response body
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/webhooks/{gateway}/:
     post:
       operationId: webhooks_ingest
@@ -363,6 +547,11 @@ components:
         status_changed_at:
           type: string
           format: date-time
+        scheduled_for:
+          type: string
+          format: date-time
+          nullable: true
+          description: When a scheduled message will be sent
         attempt_count:
           type: integer
         failure_code:
@@ -371,6 +560,14 @@ components:
           type: string
         is_retryable:
           type: boolean
+        can_retry:
+          type: boolean
+          description: The recruiter can send this failed message again
+        retry_of_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The failed message this one retries
         created_at:
           type: string
           format: date-time
@@ -396,6 +593,7 @@ components:
       - attempt_count
       - batch_id
       - body
+      - can_retry
       - candidate
       - candidate_id
       - channel
@@ -408,6 +606,8 @@ components:
       - is_retryable
       - read_at
       - recipient
+      - retry_of_id
+      - scheduled_for
       - sent_at
       - status
       - status_changed_at
@@ -597,8 +797,21 @@ components:
     ChannelEnum:
       enum:
       - sms
+      - email
       type: string
-      description: '* `sms` - SMS'
+      description: |-
+        * `sms` - SMS
+        * `email` - Email
+    HealthStatusEnum:
+      enum:
+      - operational
+      - degraded
+      - down
+      type: string
+      description: |-
+        * `operational` - operational
+        * `degraded` - degraded
+        * `down` - down
     MessageOutput:
       type: object
       properties:
@@ -622,6 +835,11 @@ components:
         status_changed_at:
           type: string
           format: date-time
+        scheduled_for:
+          type: string
+          format: date-time
+          nullable: true
+          description: When a scheduled message will be sent
         attempt_count:
           type: integer
         failure_code:
@@ -630,6 +848,14 @@ components:
           type: string
         is_retryable:
           type: boolean
+        can_retry:
+          type: boolean
+          description: The recruiter can send this failed message again
+        retry_of_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The failed message this one retries
         created_at:
           type: string
           format: date-time
@@ -653,6 +879,7 @@ components:
       - attempt_count
       - batch_id
       - body
+      - can_retry
       - candidate_id
       - channel
       - created_at
@@ -664,6 +891,8 @@ components:
       - is_retryable
       - read_at
       - recipient
+      - retry_of_id
+      - scheduled_for
       - sent_at
       - status
       - status_changed_at
@@ -707,6 +936,11 @@ components:
           allOf:
           - $ref: '#/components/schemas/ChannelEnum'
           default: sms
+        scheduled_at:
+          type: string
+          format: date-time
+          description: 'Send later: between 1 minute and 30 days from now. Omit to
+            send now.'
         idempotency_key:
           type: string
           format: uuid
@@ -735,6 +969,103 @@ components:
     NullEnum:
       enum:
       - null
+    ProviderHealth:
+      type: object
+      properties:
+        name:
+          type: string
+        display_name:
+          type: string
+          description: Shown to recruiters
+        channel:
+          allOf:
+          - $ref: '#/components/schemas/ChannelEnum'
+          description: |-
+            The channel it delivers
+
+            * `sms` - SMS
+            * `email` - Email
+        status:
+          $ref: '#/components/schemas/HealthStatusEnum'
+        detail:
+          type: string
+          description: Why the provider is not operational, if known
+        sent:
+          type: integer
+          description: Messages that reached the provider
+        delivered:
+          type: integer
+        failed:
+          type: integer
+      required:
+      - channel
+      - delivered
+      - detail
+      - display_name
+      - failed
+      - name
+      - sent
+      - status
+    ServiceHealth:
+      type: object
+      properties:
+        status:
+          allOf:
+          - $ref: '#/components/schemas/HealthStatusEnum'
+          description: |-
+            The least healthy provider's status
+
+            * `operational` - operational
+            * `degraded` - degraded
+            * `down` - down
+        window_hours:
+          type: integer
+          description: Period the message counts cover
+        providers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderHealth'
+      required:
+      - providers
+      - status
+      - window_hours
+    TemplateInputRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        body:
+          type: string
+          minLength: 1
+          description: May use {{first_name}} and {{full_name}}
+          maxLength: 1000
+      required:
+      - body
+      - name
+    TemplateOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        body:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - body
+      - created_at
+      - id
+      - name
+      - updated_at
     WebhookIngestOutput:
       type: object
       properties:
@@ -762,7 +1093,9 @@ components:
       - unsupported_media_type
       - throttled
       - conflict
+      - not_retryable
       - duplicate_candidate
+      - duplicate_template
       - invalid_webhook_signature
       - invalid_webhook_payload
       - internal_error

@@ -12,6 +12,11 @@ export function formatTime(value: string): string {
   return dayjs(value).format(TIME_FORMAT);
 }
 
+/** "31-10-2026, 9:00 AM" */
+export function formatDateTime(value: string): string {
+  return `${formatDate(value)}, ${formatTime(value)}`;
+}
+
 const INDIA_PREFIX = "+91";
 
 /** E.164 for display: Indian numbers as "+91 9876543210", others unchanged. */

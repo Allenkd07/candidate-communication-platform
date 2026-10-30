@@ -31,7 +31,7 @@ const SKELETON_ROWS = 10;
 // Position of the empty and error states below the header row.
 const OVERLAY_OFFSET = { pt: "108px", pl: "8px" };
 
-export type SelectedCandidate = Pick<CandidateListItem, "id" | "full_name">;
+export type SelectedCandidate = Pick<CandidateListItem, "id" | "full_name" | "code">;
 
 type CandidateTableProps = {
   data: CandidatePage | undefined;
@@ -156,7 +156,7 @@ export function CandidateTable(props: CandidateTableProps) {
                   disabled={rows.length === 0}
                   onChange={(event) =>
                     props.onTogglePage(
-                      rows.map(({ id, full_name }) => ({ id, full_name })),
+                      rows.map(({ id, full_name, code }) => ({ id, full_name, code })),
                       event.target.checked,
                     )
                   }
@@ -278,7 +278,7 @@ function CandidateRow({
   onToggle: (candidate: SelectedCandidate) => void;
   onOpenHistory: (candidateId: string) => void;
 }) {
-  const toggle = () => onToggle({ id: candidate.id, full_name: candidate.full_name });
+  const toggle = () => onToggle({ id: candidate.id, full_name: candidate.full_name, code: candidate.code });
 
   return (
     <TableRow hover selected={selected}>

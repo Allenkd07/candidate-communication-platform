@@ -9,11 +9,13 @@ import Button from "@mui/material/Button";
 import InputAdornment from "@mui/material/InputAdornment";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
 type AppHeaderProps = {
+  /** Shown beside the title. */
+  status?: ReactNode;
   selectedCount: number;
   search: string;
   onSearchChange: (search: string) => void;
@@ -22,7 +24,7 @@ type AppHeaderProps = {
   onSend: () => void;
 };
 
-export function AppHeader({ selectedCount, search, onSearchChange, onAdd, onDelete, onSend }: AppHeaderProps) {
+export function AppHeader({ status, selectedCount, search, onSearchChange, onAdd, onDelete, onSend }: AppHeaderProps) {
   const nothingSelected = selectedCount === 0;
 
   return (
@@ -40,7 +42,10 @@ export function AppHeader({ selectedCount, search, onSearchChange, onAdd, onDele
         bgcolor: "background.paper",
       }}
     >
-      <Typography variant="h1">Candidate communication</Typography>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <Typography variant="h1">Candidate communication</Typography>
+        {status}
+      </Box>
       <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
           <Button variant="outlined" startIcon={<AddIcon />} onClick={onAdd}>
           Add candidate

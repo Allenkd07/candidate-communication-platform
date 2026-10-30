@@ -16,6 +16,7 @@ function event(status: MessageStatusEvent["status"], at: string): MessageStatusE
     failure_code: "",
     failure_reason: "",
     is_retryable: false,
+    can_retry: false,
   };
 }
 

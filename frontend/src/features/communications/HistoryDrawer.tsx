@@ -9,17 +9,24 @@ import Typography from "@mui/material/Typography";
 import { DrawerShell } from "@/components/DrawerShell";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
+import { useToast } from "@/components/ToastProvider";
 import { useCandidate } from "@/features/candidates/api";
+import { errorMessage } from "@/lib/api/errors";
 import type { Message } from "@/lib/api/types";
-import { formatDate, formatPhone, formatTime } from "@/lib/format";
+import { formatDate, formatDateTime, formatPhone, formatTime } from "@/lib/format";
 
-import { useCandidateHistory } from "./api";
+import { useCandidateHistory, useRetryMessages } from "./api";
 import { StatusChip } from "./StatusChip";
 
 /** A candidate's communication history, newest first. Open while `candidateId` is set. */
 export function HistoryDrawer({ candidateId, onClose }: { candidateId: string | null; onClose: () => void }) {
   const candidate = useCandidate(candidateId);
   const history = useCandidateHistory(candidateId);
+  const retry = useRetryMessages();
+  const toast = useToast();
+  const retryingId = retry.isPending && "messageId" in retry.variables ? retry.variables.messageId : null;
+  const retryMessage = (messageId: string) =>
+    retry.mutate({ messageId }, { onError: (error) => toast(errorMessage(error), "error") });
   const messages = history.data?.pages.flatMap((page) => page.results) ?? [];
 
   let content;
@@ -59,7 +66,13 @@ export function HistoryDrawer({ candidateId, onClose }: { candidateId: string | 
         ) : (
           <Box component="ol" sx={{ listStyle: "none", m: 0, mt: 4, p: 0 }}>
             {messages.map((message) => (
-              <HistoryItem key={message.id} message={message} />
+              <HistoryItem
+                key={message.id}
+                message={message}
+                onRetry={() => retryMessage(message.id)}
+                retrying={retryingId === message.id}
+                retryDisabled={retry.isPending}
+              />
             ))}
           </Box>
         )}
@@ -81,7 +94,17 @@ export function HistoryDrawer({ candidateId, onClose }: { candidateId: string | 
   );
 }
 
-function HistoryItem({ message }: { message: Message }) {
+function HistoryItem({
+  message,
+  onRetry,
+  retrying,
+  retryDisabled,
+}: {
+  message: Message;
+  onRetry: () => void;
+  retrying: boolean;
+  retryDisabled: boolean;
+}) {
   return (
     <Box
       component="li"
@@ -99,14 +122,39 @@ function HistoryItem({ message }: { message: Message }) {
           <span>{formatDate(message.created_at)}</span>
           <span aria-hidden>|</span>
           <span>{formatTime(message.created_at)}</span>
+          {message.channel === "email" && (
+            <>
+              <span aria-hidden>|</span>
+              <span>Email</span>
+            </>
+          )}
+          {message.status === "scheduled" && message.scheduled_for && (
+            <>
+              <span aria-hidden>|</span>
+              <span>Sends {formatDateTime(message.scheduled_for)}</span>
+            </>
+          )}
+          {message.retry_of_id && (
+            <>
+              <span aria-hidden>|</span>
+              <span>Retry</span>
+            </>
+          )}
         </Typography>
         <StatusChip status={message.status} />
       </Box>
       <Typography sx={[bodyText, { whiteSpace: "pre-wrap", overflowWrap: "anywhere" }]}>{message.body}</Typography>
-      {message.status === "failed" && message.failure_reason && (
-        <Typography variant="body2" sx={{ color: "error.main" }}>
-          {message.failure_reason}
-        </Typography>
+      {message.status === "failed" && (message.failure_reason || message.can_retry) && (
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+          <Typography variant="body2" sx={{ color: "error.main" }}>
+            {message.failure_reason}
+          </Typography>
+          {message.can_retry && (
+            <Button size="small" onClick={onRetry} loading={retrying} disabled={retryDisabled} sx={{ flexShrink: 0 }}>
+              Retry
+            </Button>
+          )}
+        </Box>
       )}
     </Box>
   );

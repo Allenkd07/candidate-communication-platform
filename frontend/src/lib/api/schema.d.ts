@@ -20,6 +20,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/batches/{batch_id}/retry-failed/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Send every retryable failed message of a batch again; 409 if there are none. */
+        post: operations["batches_retry_failed"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/candidates/": {
         parameters: {
             query?: never;
@@ -101,6 +118,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/messages/{message_id}/retry/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Send a failed message again as a new message in the same batch. Returns the batch, in which the retry replaces the failed message. 409 not_retryable when the failure doesn't allow a retry, it was already retried, or the candidate was deleted. */
+        post: operations["messages_retry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/providers/health/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Whether each messaging provider is reachable (operational, degraded or down) and its message counts over the last 24 hours. */
+        get: operations["providers_health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/templates/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["templates_list"];
+        put?: never;
+        post: operations["templates_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/templates/{template_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["templates_update"];
+        post?: never;
+        delete: operations["templates_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/webhooks/{gateway}/": {
         parameters: {
             query?: never;
@@ -140,10 +223,22 @@ export interface components {
             status: components["schemas"]["MessageStatusEnum"];
             /** Format: date-time */
             status_changed_at: string;
+            /**
+             * Format: date-time
+             * @description When a scheduled message will be sent
+             */
+            scheduled_for: string | null;
             attempt_count: number;
             failure_code: string;
             failure_reason: string;
             is_retryable: boolean;
+            /** @description The recruiter can send this failed message again */
+            can_retry: boolean;
+            /**
+             * Format: uuid
+             * @description The failed message this one retries
+             */
+            retry_of_id: string | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -225,9 +320,17 @@ export interface components {
         };
         /**
          * @description * `sms` - SMS
+         *     * `email` - Email
          * @enum {string}
          */
-        ChannelEnum: "sms";
+        ChannelEnum: "sms" | "email";
+        /**
+         * @description * `operational` - operational
+         *     * `degraded` - degraded
+         *     * `down` - down
+         * @enum {string}
+         */
+        HealthStatusEnum: "operational" | "degraded" | "down";
         MessageOutput: {
             /** Format: uuid */
             id: string;
@@ -241,10 +344,22 @@ export interface components {
             status: components["schemas"]["MessageStatusEnum"];
             /** Format: date-time */
             status_changed_at: string;
+            /**
+             * Format: date-time
+             * @description When a scheduled message will be sent
+             */
+            scheduled_for: string | null;
             attempt_count: number;
             failure_code: string;
             failure_reason: string;
             is_retryable: boolean;
+            /** @description The recruiter can send this failed message again */
+            can_retry: boolean;
+            /**
+             * Format: uuid
+             * @description The failed message this one retries
+             */
+            retry_of_id: string | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -270,6 +385,11 @@ export interface components {
             /** @default sms */
             channel: components["schemas"]["ChannelEnum"];
             /**
+             * Format: date-time
+             * @description Send later: between 1 minute and 30 days from now. Omit to send now.
+             */
+            scheduled_at?: string;
+            /**
              * Format: uuid
              * @description A new UUID per message. Resending with the same key (for example after a lost response) returns the original batch instead of messaging everyone again.
              */
@@ -287,13 +407,60 @@ export interface components {
         MessageStatusEnum: "scheduled" | "queued" | "sent" | "delivered" | "read" | "failed";
         /** @enum {unknown} */
         NullEnum: null;
+        ProviderHealth: {
+            name: string;
+            /** @description Shown to recruiters */
+            display_name: string;
+            /**
+             * @description The channel it delivers
+             *
+             *     * `sms` - SMS
+             *     * `email` - Email
+             */
+            channel: components["schemas"]["ChannelEnum"];
+            status: components["schemas"]["HealthStatusEnum"];
+            /** @description Why the provider is not operational, if known */
+            detail: string;
+            /** @description Messages that reached the provider */
+            sent: number;
+            delivered: number;
+            failed: number;
+        };
+        ServiceHealth: {
+            /**
+             * @description The least healthy provider's status
+             *
+             *     * `operational` - operational
+             *     * `degraded` - degraded
+             *     * `down` - down
+             */
+            status: components["schemas"]["HealthStatusEnum"];
+            /** @description Period the message counts cover */
+            window_hours: number;
+            providers: components["schemas"]["ProviderHealth"][];
+        };
+        TemplateInputRequest: {
+            name: string;
+            /** @description May use {{first_name}} and {{full_name}} */
+            body: string;
+        };
+        TemplateOutput: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            body: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
         WebhookIngestOutput: {
             received: number;
             applied: number;
             ignored: number;
         };
         /** @enum {string} */
-        ErrorCodeEnum: "validation_error" | "bad_request" | "parse_error" | "not_authenticated" | "permission_denied" | "not_found" | "method_not_allowed" | "not_acceptable" | "unsupported_media_type" | "throttled" | "conflict" | "duplicate_candidate" | "invalid_webhook_signature" | "invalid_webhook_payload" | "internal_error";
+        ErrorCodeEnum: "validation_error" | "bad_request" | "parse_error" | "not_authenticated" | "permission_denied" | "not_found" | "method_not_allowed" | "not_acceptable" | "unsupported_media_type" | "throttled" | "conflict" | "not_retryable" | "duplicate_candidate" | "duplicate_template" | "invalid_webhook_signature" | "invalid_webhook_payload" | "internal_error";
         ErrorResponse: {
             error: {
                 code: components["schemas"]["ErrorCodeEnum"];
@@ -324,6 +491,36 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOutput"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    batches_retry_failed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -566,6 +763,187 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BatchOutput"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    messages_retry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOutput"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    providers_health: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceHealth"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    templates_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOutput"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    templates_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateInputRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOutput"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    templates_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateInputRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOutput"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    templates_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

@@ -8,6 +8,8 @@ import { useToast } from "@/components/ToastProvider";
 import { HistoryDrawer } from "@/features/communications/HistoryDrawer";
 import { POLL_MS, useLiveMessageUpdates } from "@/features/communications/liveUpdates";
 import { SendMessageDrawer } from "@/features/communications/SendMessageDrawer";
+import { OutageBanner } from "@/features/health/OutageBanner";
+import { ServiceStatus } from "@/features/health/ServiceStatus";
 import { ApiError } from "@/lib/api/errors";
 
 import { AddCandidateDialog } from "./AddCandidateDialog";
@@ -97,6 +99,7 @@ export function CandidatesPage() {
   return (
     <Box sx={{ height: "100dvh", display: "flex", flexDirection: "column", bgcolor: "background.default" }}>
       <AppHeader
+        status={<ServiceStatus />}
         selectedCount={selected.size}
         search={url.search}
         onSearchChange={(search) => setUrl({ search, page: 1 })}
@@ -104,6 +107,7 @@ export function CandidatesPage() {
         onDelete={() => openWithSelection("delete")}
         onSend={() => openWithSelection("send")}
       />
+      <OutageBanner />
       <Box component="main" sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         <CandidateTable
           data={candidates.data}

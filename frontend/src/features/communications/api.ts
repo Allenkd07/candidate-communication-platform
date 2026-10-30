@@ -31,6 +31,24 @@ export function useSendMessage() {
   });
 }
 
+/** Sends failed messages again: one message, or every retryable one in a send. */
+export function useRetryMessages() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (target: { messageId: string } | { batchId: string }) =>
+      unwrap(
+        "messageId" in target
+          ? api.POST("/api/v1/messages/{message_id}/retry/", { params: { path: { message_id: target.messageId } } })
+          : api.POST("/api/v1/batches/{batch_id}/retry-failed/", { params: { path: { batch_id: target.batchId } } }),
+      ),
+    onSuccess: (batch) => {
+      queryClient.setQueryData(messageKeys.batch(batch.id), batch);
+      void queryClient.invalidateQueries({ queryKey: candidateKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: messageKeys.histories() });
+    },
+  });
+}
+
 /** A send's live results. `pollMs` is the fallback for when live updates are unavailable. */
 export function useBatch(id: string | null, options: { pollMs?: number } = {}) {
   return useQuery({
