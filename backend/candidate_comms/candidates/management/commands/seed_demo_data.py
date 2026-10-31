@@ -37,7 +37,7 @@ CANDIDATES: list[tuple[str, str, str, MessageStatus | None]] = [
 
 # The simulator decides the outcome from the last four digits (see provider-simulator).
 TEST_NUMBER_CANDIDATES: list[tuple[str, str, str]] = [
-    ("Test Invalid Number", "+919876500000", "test.invalid@example.com"),
+    ("Test Unreachable Number", "+919876500000", "test.unreachable@example.com"),
     ("Test Delivery Fails", "+919876511111", "test.delivery-fails@example.com"),
     ("Test Flaky Provider", "+919876522222", "test.flaky@example.com"),
     ("Test Rate Limited", "+919876533333", "test.rate-limited@example.com"),
