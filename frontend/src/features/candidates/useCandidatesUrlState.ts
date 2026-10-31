@@ -4,6 +4,8 @@ import dayjs from "dayjs";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
 
+import type { CandidateSort } from "@/lib/api/types";
+
 import type { StatusFilter } from "./api";
 
 export const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
@@ -22,6 +24,8 @@ export type CandidatesUrlState = {
   status: StatusFilter[];
   from: string;
   to: string;
+  /** Empty means newest first. */
+  sort: CandidateSort | "";
 };
 
 export type ColumnFilters = Pick<CandidatesUrlState, "name" | "phone" | "code" | "status" | "from" | "to">;
@@ -39,9 +43,20 @@ const PARAM = {
   status: "status",
   from: "from",
   to: "to",
+  sort: "sort",
 } as const;
 
-const DEFAULTS: CandidatesUrlState = { search: "", page: 1, pageSize: DEFAULT_PAGE_SIZE, candidateId: null, ...NO_FILTERS };
+const DEFAULTS: CandidatesUrlState = {
+  search: "",
+  page: 1,
+  pageSize: DEFAULT_PAGE_SIZE,
+  candidateId: null,
+  ...NO_FILTERS,
+  sort: "",
+};
+
+export type SortColumn = Exclude<CandidateSort, `-${string}`>;
+const SORT_COLUMNS: SortColumn[] = ["name", "phone", "last_message", "status", "code"];
 
 /** The list endpoint's limits on each filter. */
 export const FILTER_LIMITS = { name: 100, phone: 20, code: 6 } as const;
@@ -61,6 +76,18 @@ function dateParam(value: string | null): string {
 
 export function hasFilters(filters: ColumnFilters): boolean {
   return (Object.keys(NO_FILTERS) as (keyof ColumnFilters)[]).some((key) => filters[key].length > 0);
+}
+
+/** Clicking a column cycles ascending → descending → back to newest first. */
+export function nextSort(column: SortColumn, current: CandidateSort | ""): CandidateSort | "" {
+  if (current === column) return `-${column}` as const;
+  if (current === `-${column}`) return "";
+  return column;
+}
+
+function sortParam(value: string | null): CandidateSort | "" {
+  const column = value?.replace(/^-/, "");
+  return SORT_COLUMNS.some((known) => known === column) ? (value as CandidateSort) : "";
 }
 
 function positiveInt(value: string | null, fallback: number): number {
@@ -83,6 +110,7 @@ export function parseUrlState(searchParams: Pick<URLSearchParams, "get">): Candi
     status: STATUS_OPTIONS.filter((status) => statuses.includes(status)),
     from: dateParam(searchParams.get(PARAM.from)),
     to: dateParam(searchParams.get(PARAM.to)),
+    sort: sortParam(searchParams.get(PARAM.sort)),
   };
 }
 

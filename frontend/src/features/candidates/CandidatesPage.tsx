@@ -33,6 +33,7 @@ export function CandidatesPage() {
       page: url.page,
       pageSize: url.pageSize,
       filters: { name: url.name, phone: url.phone, code: url.code, status: url.status, from: url.from, to: url.to },
+      sort: url.sort,
     },
     { pollMs: live ? POLL_MS.candidates.live : POLL_MS.candidates.fallback },
   );
@@ -119,6 +120,8 @@ export function CandidatesPage() {
           filters={url}
           onFiltersChange={(changes) => setUrl({ ...changes, page: 1 })}
           onClearFilters={() => setUrl({ ...NO_FILTERS, page: 1 })}
+          sort={url.sort}
+          onSortChange={(sort) => setUrl({ sort, page: 1 })}
           page={url.page}
           pageSize={url.pageSize}
           onPageChange={(page) => setUrl({ page })}

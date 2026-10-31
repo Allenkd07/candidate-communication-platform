@@ -48,6 +48,7 @@ class CandidateListCreateApi(APIView):
                 last_message_after=data["last_message_after"],
                 last_message_before=data["last_message_before"],
             ),
+            sort=data["sort"],
         )
         return paginated_response(
             queryset=queryset,

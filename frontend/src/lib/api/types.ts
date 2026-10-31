@@ -1,8 +1,9 @@
 // Short names for the generated API types. Edit the backend serializers, then run
 // `npm run gen:api`; never write response types by hand.
-import type { components } from "./schema";
+import type { components, operations } from "./schema";
 
 type Schemas = components["schemas"];
+type CandidateListQuery = NonNullable<operations["candidates_list"]["parameters"]["query"]>;
 
 export type ErrorCode = Schemas["ErrorCodeEnum"];
 export type ErrorResponse = Schemas["ErrorResponse"];
@@ -11,6 +12,8 @@ export type Candidate = Schemas["CandidateOutput"];
 export type CandidateListItem = Schemas["CandidateListOutput"];
 export type CandidatePage = Schemas["CandidatePage"];
 export type CandidateCreateInput = Schemas["CandidateCreateInputRequest"];
+/** A column to sort the candidate list by, prefixed with "-" for descending. */
+export type CandidateSort = Exclude<CandidateListQuery["sort"], "" | undefined>;
 
 export type Message = Schemas["MessageOutput"];
 export type MessagePage = Schemas["MessagePage"];

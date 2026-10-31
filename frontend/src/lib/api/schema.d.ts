@@ -557,6 +557,21 @@ export interface operations {
                 /** @description Mobile number contains these digits */
                 phone?: string;
                 search?: string;
+                /**
+                 * @description Column to sort by, `-` prefix for descending; newest first by default. Status sorts in lifecycle order; candidates never messaged come last
+                 *
+                 *     * `name` - name
+                 *     * `phone` - phone
+                 *     * `last_message` - last_message
+                 *     * `status` - status
+                 *     * `code` - code
+                 *     * `-name` - -name
+                 *     * `-phone` - -phone
+                 *     * `-last_message` - -last_message
+                 *     * `-status` - -status
+                 *     * `-code` - -code
+                 */
+                sort?: "name" | "phone" | "last_message" | "status" | "code" | "-name" | "-phone" | "-last_message" | "-status" | "-code" | "";
                 /** @description Latest message status is any of these; `none` matches never messaged */
                 status?: ("scheduled" | "queued" | "sent" | "delivered" | "read" | "failed" | "none")[];
             };

@@ -15,17 +15,25 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
+import TableSortLabel from "@mui/material/TableSortLabel";
 import Typography from "@mui/material/Typography";
 import type { ComponentProps, ReactNode } from "react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
 import { StatusChip } from "@/features/communications/StatusChip";
-import type { CandidateListItem, CandidatePage } from "@/lib/api/types";
+import type { CandidateListItem, CandidatePage, CandidateSort } from "@/lib/api/types";
 import { formatDate, formatPhone } from "@/lib/format";
 
 import { ColumnFilter, DateRangeFilter, StatusFilterField, TextFilter } from "./ColumnFilter";
-import { type ColumnFilters, FILTER_LIMITS, hasFilters, PAGE_SIZE_OPTIONS } from "./useCandidatesUrlState";
+import {
+  type ColumnFilters,
+  FILTER_LIMITS,
+  hasFilters,
+  nextSort,
+  PAGE_SIZE_OPTIONS,
+  type SortColumn,
+} from "./useCandidatesUrlState";
 
 const SKELETON_ROWS = 10;
 // Position of the empty and error states below the header row.
@@ -43,6 +51,8 @@ type CandidateTableProps = {
   filters: ColumnFilters;
   onFiltersChange: (changes: Partial<ColumnFilters>) => void;
   onClearFilters: () => void;
+  sort: CandidateSort | "";
+  onSortChange: (sort: CandidateSort | "") => void;
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
@@ -88,8 +98,8 @@ const ruledBackground = (theme: Theme) => ({
 });
 
 export function CandidateTable(props: CandidateTableProps) {
-  const { data, isPending, isFetching, error, onRetry, search, filters, onFiltersChange, page, pageSize, selected } =
-    props;
+  const { data, isPending, isFetching, error, onRetry, search, filters, onFiltersChange, sort, onSortChange } = props;
+  const { page, pageSize, selected } = props;
   const filtered = hasFilters(filters);
   const rows = data?.results ?? [];
   const selectedOnPage = rows.filter((row) => selected.has(row.id)).length;
@@ -163,7 +173,14 @@ export function CandidateTable(props: CandidateTableProps) {
                   slotProps={{ input: { "aria-label": "Select all candidates on this page" } }}
                 />
               </TableCell>
-              <HeaderCell sx={nameHeaderCell} label="Full name" active={filters.name !== ""}>
+              <HeaderCell
+                sx={nameHeaderCell}
+                label="Full name"
+                column="name"
+                sort={sort}
+                onSortChange={onSortChange}
+                active={filters.name !== ""}
+              >
                 {(close, focusRef) => (
                   <TextFilter
                     label="Name"
@@ -175,7 +192,14 @@ export function CandidateTable(props: CandidateTableProps) {
                   />
                 )}
               </HeaderCell>
-              <HeaderCell sx={dataColumn} label="Mobile number" active={filters.phone !== ""}>
+              <HeaderCell
+                sx={dataColumn}
+                label="Mobile number"
+                column="phone"
+                sort={sort}
+                onSortChange={onSortChange}
+                active={filters.phone !== ""}
+              >
                 {(close, focusRef) => (
                   <TextFilter
                     label="Number"
@@ -189,7 +213,14 @@ export function CandidateTable(props: CandidateTableProps) {
                   />
                 )}
               </HeaderCell>
-              <HeaderCell sx={dataColumn} label="Last message" active={filters.from !== "" || filters.to !== ""}>
+              <HeaderCell
+                sx={dataColumn}
+                label="Last message"
+                column="last_message"
+                sort={sort}
+                onSortChange={onSortChange}
+                active={filters.from !== "" || filters.to !== ""}
+              >
                 {(close, focusRef) => (
                   <DateRangeFilter
                     value={{ from: filters.from, to: filters.to }}
@@ -199,7 +230,14 @@ export function CandidateTable(props: CandidateTableProps) {
                   />
                 )}
               </HeaderCell>
-              <HeaderCell sx={dataColumn} label="Status" active={filters.status.length > 0}>
+              <HeaderCell
+                sx={dataColumn}
+                label="Status"
+                column="status"
+                sort={sort}
+                onSortChange={onSortChange}
+                active={filters.status.length > 0}
+              >
                 {(close, focusRef) => (
                   <StatusFilterField
                     value={filters.status}
@@ -209,7 +247,14 @@ export function CandidateTable(props: CandidateTableProps) {
                   />
                 )}
               </HeaderCell>
-              <HeaderCell sx={dataColumn} label="Candidate ID" active={filters.code !== ""}>
+              <HeaderCell
+                sx={dataColumn}
+                label="Candidate ID"
+                column="code"
+                sort={sort}
+                onSortChange={onSortChange}
+                active={filters.code !== ""}
+              >
                 {(close, focusRef) => (
                   <TextFilter
                     label="ID"
@@ -342,22 +387,38 @@ function SkeletonRow() {
   );
 }
 
-/** Header label with its column filter at the far right. */
+/** Sortable header label with its column filter at the far right. */
 function HeaderCell({
   sx,
   label,
+  column,
+  sort,
+  onSortChange,
   active,
   children,
 }: {
   sx: SxProps<Theme>;
   label: string;
+  column: SortColumn;
+  sort: CandidateSort | "";
+  onSortChange: (sort: CandidateSort | "") => void;
   active: boolean;
   children: ComponentProps<typeof ColumnFilter>["children"];
 }) {
+  const direction = sort === column ? "asc" : sort === `-${column}` ? "desc" : null;
   return (
-    <TableCell sx={sx}>
+    <TableCell
+      sx={sx}
+      aria-sort={direction === "asc" ? "ascending" : direction === "desc" ? "descending" : undefined}
+    >
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-        {label}
+        <TableSortLabel
+          active={direction !== null}
+          direction={direction ?? "asc"}
+          onClick={() => onSortChange(nextSort(column, sort))}
+        >
+          {label}
+        </TableSortLabel>
         <ColumnFilter label={label} active={active}>
           {children}
         </ColumnFilter>

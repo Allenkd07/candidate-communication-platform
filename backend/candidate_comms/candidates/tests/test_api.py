@@ -171,6 +171,44 @@ def test_last_message_date_range_uses_the_latest_message(client: Client) -> None
     assert ids(until_yesterday) == [str(earlier.id)]
 
 
+@pytest.mark.parametrize(
+    ("sort", "expected"),
+    [
+        ("", ["meera", "aarav", "taylor"]),
+        ("name", ["aarav", "meera", "taylor"]),
+        ("-name", ["taylor", "meera", "aarav"]),
+        ("phone", ["aarav", "meera", "taylor"]),
+        ("code", ["taylor", "aarav", "meera"]),
+        ("-code", ["meera", "aarav", "taylor"]),
+        ("last_message", ["taylor", "aarav", "meera"]),
+        ("-last_message", ["aarav", "taylor", "meera"]),
+        ("status", ["taylor", "aarav", "meera"]),
+        ("-status", ["aarav", "taylor", "meera"]),
+    ],
+)
+def test_sort(client: Client, sort: str, expected: list[str]) -> None:
+    now = timezone.now()
+    people = {
+        "taylor": CandidateFactory.create(
+            full_name="taylor Swift", phone="+919845012345", code="A00001"
+        ),
+        "aarav": CandidateFactory.create(
+            full_name="Aarav Sharma", phone="+917012345678", code="B00001"
+        ),
+        "meera": CandidateFactory.create(
+            full_name="Meera Kapoor", phone="+918800765432", code="C00001"
+        ),
+    }
+    read = MessageFactory.create(candidate=people["taylor"], status=MessageStatus.READ)
+    Message.objects.filter(id=read.id).update(created_at=now - timedelta(days=1))
+    MessageFactory.create(candidate=people["aarav"], status=MessageStatus.FAILED)
+
+    results = client.get(LIST_URL, {"sort": sort}).json()["results"]
+
+    ids = {str(candidate.id): key for key, candidate in people.items()}
+    assert [ids[row["id"]] for row in results] == expected
+
+
 def test_filters_reject_bad_values(client: Client) -> None:
     now = timezone.now()
     reversed_range = {
@@ -181,8 +219,10 @@ def test_filters_reject_bad_values(client: Client) -> None:
     bad_status = client.get(LIST_URL, {"status": "unknown"})
     bad_phone = client.get(LIST_URL, {"phone": "abc"})
     bad_range = client.get(LIST_URL, reversed_range)
+    bad_sort = client.get(LIST_URL, {"sort": "created_at"})
 
     assert bad_status.status_code == bad_phone.status_code == bad_range.status_code == 400
+    assert bad_sort.status_code == 400
     assert set(bad_range.json()["error"]["fields"]) == {"last_message_before"}
 
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseUrlState } from "./useCandidatesUrlState";
+import { nextSort, parseUrlState } from "./useCandidatesUrlState";
 
 const parse = (query: string) => parseUrlState(new URLSearchParams(query));
 
@@ -26,5 +26,20 @@ describe("parseUrlState", () => {
 
   it("falls back to the first page and default size for bad paging values", () => {
     expect(parse("page=-2&rows=7")).toMatchObject({ page: 1, pageSize: 10 });
+  });
+
+  it("reads a known sort and drops an unknown one", () => {
+    expect(parse("sort=-last_message").sort).toBe("-last_message");
+    expect(parse("sort=created_at").sort).toBe("");
+    expect(parse("sort=--name").sort).toBe("");
+  });
+});
+
+describe("nextSort", () => {
+  it("cycles ascending, descending, then newest first", () => {
+    expect(nextSort("name", "")).toBe("name");
+    expect(nextSort("name", "name")).toBe("-name");
+    expect(nextSort("name", "-name")).toBe("");
+    expect(nextSort("status", "-name")).toBe("status");
   });
 });

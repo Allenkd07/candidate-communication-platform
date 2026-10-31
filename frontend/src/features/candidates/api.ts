@@ -2,14 +2,20 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import dayjs from "dayjs";
 
 import { api, unwrap } from "@/lib/api/client";
-import type { CandidateCreateInput, MessageStatus } from "@/lib/api/types";
+import type { CandidateCreateInput, CandidateSort, MessageStatus } from "@/lib/api/types";
 
 import type { ColumnFilters } from "./useCandidatesUrlState";
 
 /** A message status, or "none" for candidates never messaged. */
 export type StatusFilter = MessageStatus | "none";
 
-export type CandidateListParams = { search: string; page: number; pageSize: number; filters: ColumnFilters };
+export type CandidateListParams = {
+  search: string;
+  page: number;
+  pageSize: number;
+  filters: ColumnFilters;
+  sort: CandidateSort | "";
+};
 
 export const candidateKeys = {
   all: ["candidates"] as const,
@@ -30,6 +36,7 @@ export function useCandidates(params: CandidateListParams, options: { pollMs?: n
               page: params.page,
               page_size: params.pageSize,
               ...filterQuery(params.filters),
+              sort: params.sort || undefined,
             },
           },
           signal,

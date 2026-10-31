@@ -118,6 +118,36 @@ paths:
           default: ''
           maxLength: 100
       - in: query
+        name: sort
+        schema:
+          enum:
+          - name
+          - phone
+          - last_message
+          - status
+          - code
+          - -name
+          - -phone
+          - -last_message
+          - -status
+          - -code
+          - ''
+          type: string
+          default: ''
+        description: |-
+          Column to sort by, `-` prefix for descending; newest first by default. Status sorts in lifecycle order; candidates never messaged come last
+
+          * `name` - name
+          * `phone` - phone
+          * `last_message` - last_message
+          * `status` - status
+          * `code` - code
+          * `-name` - -name
+          * `-phone` - -phone
+          * `-last_message` - -last_message
+          * `-status` - -status
+          * `-code` - -code
+      - in: query
         name: status
         schema:
           type: array

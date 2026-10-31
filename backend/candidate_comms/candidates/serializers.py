@@ -5,7 +5,7 @@ from rest_framework import serializers
 from candidate_comms.communications.models import MessageStatus
 from candidate_comms.core.pagination import paginated_serializer
 
-from .selectors import NO_MESSAGES
+from .selectors import NO_MESSAGES, SORT_KEYS
 from .services import MAX_BULK_DELETE
 from .validators import NAME_MAX_LENGTH, normalize_email, normalize_full_name, normalize_phone
 
@@ -41,6 +41,16 @@ class CandidateListFilterSerializer(serializers.Serializer[Any]):
     )
     last_message_before = serializers.DateTimeField(
         required=False, default=None, help_text="Latest message sent before"
+    )
+    sort = serializers.ChoiceField(
+        choices=[*SORT_KEYS, *(f"-{key}" for key in SORT_KEYS)],
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=(
+            "Column to sort by, `-` prefix for descending; newest first by default. Status "
+            "sorts in lifecycle order; candidates never messaged come last"
+        ),
     )
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:

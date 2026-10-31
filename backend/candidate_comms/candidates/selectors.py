@@ -4,10 +4,22 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
-from django.db.models import OuterRef, Q, QuerySet, Subquery
+from django.db.models import (
+    Case,
+    F,
+    IntegerField,
+    OrderBy,
+    OuterRef,
+    Q,
+    QuerySet,
+    Subquery,
+    Value,
+    When,
+)
+from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404
 
-from candidate_comms.communications.models import Message
+from candidate_comms.communications.models import Message, MessageStatus
 
 from .models import Candidate
 
@@ -15,6 +27,9 @@ _PHONE_SEPARATORS = re.compile(r"[\s()+\-]")
 
 # Status filter value for candidates who have never been messaged.
 NO_MESSAGES = "none"
+
+# Table columns the list can be sorted by; a leading "-" sorts descending.
+SORT_KEYS = ("name", "phone", "last_message", "status", "code")
 
 
 @dataclass(frozen=True)
@@ -30,9 +45,9 @@ class CandidateFilters:
 
 
 def candidate_list(
-    *, search: str = "", filters: CandidateFilters | None = None
+    *, search: str = "", filters: CandidateFilters | None = None, sort: str = ""
 ) -> QuerySet[Candidate]:
-    """Candidates, newest first, annotated with their latest message.
+    """Candidates annotated with their latest message, newest first unless sorted.
 
     The table's "Last message" and "Status" columns come from these annotations instead of
     being stored on the candidate, so their filters apply to the latest message only.
@@ -60,7 +75,32 @@ def candidate_list(
         queryset = queryset.filter(match)
     if filters:
         queryset = queryset.filter(_filters_match(filters))
-    return queryset.order_by("-created_at")
+    return queryset.order_by(*_ordering(sort))
+
+
+def _ordering(sort: str) -> list[OrderBy | str]:
+    # Newest first breaks ties, so paging through a sorted list is stable.
+    newest_first = "-created_at"
+    key = sort.removeprefix("-")
+    if key not in SORT_KEYS:
+        return [newest_first]
+    column: F | Lower | Case
+    if key == "name":
+        column = Lower("full_name")
+    elif key == "status":
+        # Statuses sort in lifecycle order (scheduled → read, then failed), not alphabetically.
+        column = Case(
+            *(
+                When(last_message_status=status, then=Value(rank))
+                for rank, status in enumerate(MessageStatus.values)
+            ),
+            output_field=IntegerField(),
+        )
+    else:
+        column = F({"phone": "phone", "last_message": "last_message_at", "code": "code"}[key])
+    # Candidates never messaged have no date or status; they stay last in both directions.
+    order = column.desc(nulls_last=True) if sort.startswith("-") else column.asc(nulls_last=True)
+    return [order, newest_first]
 
 
 def _filters_match(filters: CandidateFilters) -> Q:
