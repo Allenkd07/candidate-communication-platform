@@ -105,6 +105,9 @@ function HistoryItem({
   retrying: boolean;
   retryDisabled: boolean;
 }) {
+  const scheduled = message.status === "scheduled";
+  // A released scheduled message went out at its scheduled time, not when it was created.
+  const sentAt = !scheduled && message.scheduled_for ? message.scheduled_for : message.created_at;
   return (
     <Box
       component="li"
@@ -119,19 +122,19 @@ function HistoryItem({
     >
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, height: 24 }}>
         <Typography variant="caption" sx={{ color: "text.secondary", display: "flex", gap: 1 }}>
-          <span>{formatDate(message.created_at)}</span>
+          <span>{formatDate(sentAt)}</span>
           <span aria-hidden>|</span>
-          <span>{formatTime(message.created_at)}</span>
+          <span>{formatTime(sentAt)}</span>
           {message.channel === "email" && (
             <>
               <span aria-hidden>|</span>
               <span>Email</span>
             </>
           )}
-          {message.status === "scheduled" && message.scheduled_for && (
+          {message.scheduled_for && (
             <>
               <span aria-hidden>|</span>
-              <span>Sends {formatDateTime(message.scheduled_for)}</span>
+              <span>{scheduled ? `Sends ${formatDateTime(message.scheduled_for)}` : "Scheduled"}</span>
             </>
           )}
           {message.retry_of_id && (
