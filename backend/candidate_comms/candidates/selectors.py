@@ -48,7 +48,11 @@ def candidate_list(
     search = search.strip()
     if search:
         number = _PHONE_SEPARATORS.sub("", search)
-        match = Q(full_name__icontains=search) | Q(email__icontains=search) | Q(code__iexact=search)
+        match = Q(full_name__icontains=search) | Q(email__icontains=search)
+        # IDs are random, so only a prefix of 3+ characters is matched; shorter or mid-ID
+        # fragments would match unrelated candidates.
+        if len(search) >= 3:
+            match |= Q(code__istartswith=search)
         # Phones are stored as E.164, so "98765 43210" must match "+919876543210". Only a
         # purely numeric search is matched against phones, so "A1B2C3" never matches "...123...".
         if number.isdigit() and len(number) >= 3:

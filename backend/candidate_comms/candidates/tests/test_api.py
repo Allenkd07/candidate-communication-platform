@@ -102,7 +102,7 @@ def test_list_shows_the_latest_message(client: Client) -> None:
     ]
 
 
-@pytest.mark.parametrize("search", ["swift", "TAYLOR@", "98450 12345", "a1b2c3"])
+@pytest.mark.parametrize("search", ["swift", "TAYLOR@", "98450 12345", "a1b2c3", "a1b"])
 def test_search_matches_name_email_phone_digits_and_code(client: Client, search: str) -> None:
     taylor = CandidateFactory.create(
         full_name="Taylor Swift", phone="+919845012345", email="taylor@example.com", code="A1B2C3"
@@ -112,6 +112,15 @@ def test_search_matches_name_email_phone_digits_and_code(client: Client, search:
     results = client.get(LIST_URL, {"search": search}).json()["results"]
 
     assert [row["id"] for row in results] == [str(taylor.id)]
+
+
+@pytest.mark.parametrize("search", ["b2c", "a1"])
+def test_search_ignores_mid_and_short_id_fragments(client: Client, search: str) -> None:
+    CandidateFactory.create(full_name="Taylor Swift", email="taylor@example.com", code="A1B2C3")
+
+    results = client.get(LIST_URL, {"search": search}).json()["results"]
+
+    assert results == []
 
 
 @pytest.mark.parametrize(
