@@ -28,16 +28,17 @@ export function ServiceStatus() {
   const health = useServiceHealth();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const status = health.data?.status;
+  const label = status ? LABELS[status] : health.isPending ? "Checking…" : "Status unknown";
 
   return (
     <>
       <ButtonBase
         onClick={(event) => setAnchor(event.currentTarget)}
-        aria-label={`Communication service: ${status ? LABELS[status] : "status unknown"}. Show details`}
+        aria-label={`Communication service: ${label}. Show details`}
         sx={{ display: "flex", alignItems: "center", gap: 1, px: 1.5, py: 0.5, borderRadius: 100, border: 1, borderColor: "divider" }}
       >
         <Dot color={status ? DOT_COLOR[status] : "text.disabled"} />
-        <Typography variant="body2">{status ? LABELS[status] : "Status unknown"}</Typography>
+        <Typography variant="body2">{label}</Typography>
       </ButtonBase>
       <Popover
         open={anchor !== null}
